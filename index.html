@@ -119,26 +119,17 @@
 
 <script>
 // --- Global Variables ---
-// ★★★★★【要設定】★★★★★
-// 通常モードで使用するGASのURL。プレビュー時はこのURLは使われません。
 const SPREADSHEET_URL = 'https://script.google.com/macros/s/AKfycbxgj4EEtzSq8WcRlBG9uMUzDYN-GI2HtQ8J2yC9b9VZmpMhYLeb1g9kdCbJKDL0mQRY5g/exec';
 
 let gameData = {};
 let scores = {};
 let userName = '';
-let currentPhaseId = 'prologue'; // Starting phase ID
+let currentPhaseId = 'prologue';
 let finalEndContent = null;
 let lastDisplayedMessage = '';
 
 // --- DOM Elements ---
-const screens = {
-    top: document.getElementById('screen-top'),
-    game: document.getElementById('screen-game'),
-    dashboard: document.getElementById('screen-dashboard'),
-    hint: document.getElementById('screen-hint'),
-    preResult: document.getElementById('screen-pre-result'),
-    result: document.getElementById('screen-result'),
-};
+const screens = { top: document.getElementById('screen-top'), game: document.getElementById('screen-game'), dashboard: document.getElementById('screen-dashboard'), hint: document.getElementById('screen-hint'), preResult: document.getElementById('screen-pre-result'), result: document.getElementById('screen-result'), };
 const gameTitleEl = document.getElementById('gameTitle');
 const userNameInput = document.getElementById('userName');
 const startButton = document.getElementById('startButton');
@@ -158,41 +149,29 @@ const interviewButton = document.getElementById('interviewButton');
 const retryButton = document.getElementById('retryButton');
 
 
-// ★★★★★【プレビュー機能 ここから】★★★★★
+// ★★★★★【プレビュー機能】★★★★★
 window.addEventListener('message', receivePreviewData);
-
 function receivePreviewData(event) {
     if (event.data && event.data.type === 'JOB_SIM_PREVIEW_DATA') {
         console.log('プレビューデータを受信しました:', event.data.payload);
-        // 通常のデータ取得をキャンセルし、受信したデータでゲームを初期化
         initializeGame(event.data.payload);
     }
 }
-// ★★★★★【プレビュー機能 ここまで】★★★★★
-
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
-    // 自身がiframe内にあるかどうかで動作を切り替える
-    // iframe内の場合は管理画面からのメッセージを待つ。
-    // そうでない場合（通常アクセス）はGASからデータをフェッチする。
     if (window.self === window.top) {
         fetchAndInitialize();
     } else {
-        // iframe内の場合、リスナーは既にセットされているので何もしない。
-        // 管理画面からのデータ受信を待つ。
         console.log("プレビューモードで待機中...");
     }
 });
 
-// 通常モード時にGASからデータを取得して初期化
 async function fetchAndInitialize() {
     setupEventListeners();
     userNameInput.value = localStorage.getItem('jobsim_userName') || '';
-    
     startButton.disabled = true;
     startButton.textContent = 'データを読み込み中...';
-    
     try {
         const cacheBustingUrl = SPREADSHEET_URL + (SPREADSHEET_URL.includes('?') ? '&' : '?') + 'v=' + new Date().getTime();
         const data = await fetchJSONP(cacheBustingUrl);
@@ -204,27 +183,18 @@ async function fetchAndInitialize() {
     }
 }
 
-/**
- * ゲームのデータとUIを初期化する共通関数
- * @param {object} data - GASまたはプレビューから受け取ったgameDataオブジェクト
- */
 function initializeGame(data) {
     if (data.error) {
         alert(`データエラー: ${data.error}`);
         return;
     }
     gameData = data;
-    
-    // UIのリセット
     resetGame();
-
     if (!gameData.contents || gameData.contents.length === 0) {
         alert('コンテンツデータが見つかりません。');
         return;
     }
-
     gameTitleEl.textContent = gameData.settings.gameTitle || 'ジョブシミュレーション';
-    
     if (gameData.settings.companyLogoUrl) {
         const topLogo = document.getElementById('topLogo');
         const headerLogo = document.getElementById('headerLogo');
@@ -233,18 +203,14 @@ function initializeGame(data) {
         topLogo.classList.remove('hidden');
         headerLogo.classList.remove('hidden');
     }
-
-    // スコアの初期化
     scores = {};
     if(gameData.scoreDefinitions) {
         Object.keys(gameData.scoreDefinitions).forEach(key => {
             scores[key] = 0;
         });
     }
-
     startButton.textContent = 'シミュレーションを開始';
     validateUserName();
-    
     if (!window.listenersAttached) {
         setupEventListeners();
         window.listenersAttached = true;
@@ -268,7 +234,7 @@ function validateUserName() {
     startButton.disabled = !userNameInput.value.trim() || !gameData.settings;
 }
 
-// --- Screen Transitions ---
+// --- Screen Transitions & Game Logic ---
 function showScreen(screenName) {
     Object.values(screens).forEach(screen => screen.classList.add('hidden'));
     screens[screenName].classList.remove('hidden');
@@ -277,7 +243,6 @@ function showScreen(screenName) {
     }
 }
 
-// --- Game Logic ---
 function startGame() {
     userName = userNameInput.value.trim();
     localStorage.setItem('jobsim_userName', userName);
@@ -292,44 +257,28 @@ function resetGame() {
     showScreen('top');
 }
 
-
 async function renderPhase(phaseId) {
-    const phase = gameData.contents.find(p => p.phaseId && String(p.phaseId).trim() === String(phaseId).trim());
+    const phase = gameData.contents.find(p => p.phaseId?.trim() === phaseId?.trim());
     if (!phase) {
-        console.error(`Phase data not found for ID: '${phaseId}'`);
         const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === phaseId);
-        if(endContent) {
-            showResult(endContent);
-        } else {
-             alert(`次のコンテンツが見つかりません。(ID: ${phaseId})`);
-        }
+        if(endContent) { showResult(endContent); } 
+        else { alert(`次のコンテンツが見つかりません。(ID: ${phaseId})`); }
         return;
     }
-
     currentPhaseId = phaseId;
     phaseTitleEl.textContent = phase.phaseTitle || '';
-
     await displayMessages(phase.phaseDescription);
-    
     if (phase.taskContent) await displayMedia(phase.taskContent);
-
     chatContainer.scrollTop = chatContainer.scrollHeight;
-
-    const isQuestionPage = phase.taskName && phase.taskName.trim() !== '' && phase.choice1_text && phase.choice1_text.trim() !== '';
-    hintButton.classList.toggle('hidden', !(isQuestionPage && gameData.hints && gameData.hints[phaseId.trim()]));
+    const isQuestionPage = phase.taskName?.trim() && phase.choice1_text?.trim();
+    hintButton.classList.toggle('hidden', !(isQuestionPage && gameData.hints?.[phaseId.trim()]));
 
     if (isQuestionPage) {
         await displayMessage(phase.taskName, 'system');
-        
         const choices = [];
         for (let i = 1; i <= 3; i++) {
             if (phase[`choice${i}_text`]?.trim()) {
-                choices.push({
-                    text: phase[`choice${i}_text`],
-                    score: JSON.parse(phase[`choice${i}_score`] || '{}'),
-                    nextPhaseId: phase[`choice${i}_nextPhaseId`],
-                    message: phase[`choice${i}_message`]
-                });
+                choices.push({ text: phase[`choice${i}_text`], score: JSON.parse(phase[`choice${i}_score`] || '{}'), nextPhaseId: phase[`choice${i}_nextPhaseId`], message: phase[`choice${i}_message`] });
             }
         }
         createChoiceButtons(choices);
@@ -339,43 +288,33 @@ async function renderPhase(phaseId) {
             await sleep(1500);
             renderPhase(nextPhaseId.trim());
         } else {
-             const finalEnd = calculateEnd();
-             showResult(finalEnd);
+             showResult(calculateEnd());
         }
     }
 }
 
 async function handleChoice(choice) {
     document.getElementById('button-wrapper')?.remove();
-
     await displayMessage(choice.text, 'character', userName || 'あなた');
-
     Object.keys(choice.score).forEach(key => {
         scores[key] = (scores[key] || 0) + Number(choice.score[key] || 0);
     });
-
     if (choice.message) await displayMessages(choice.message);
-    
     await sleep(1000);
-
     const nextPhase = choice.nextPhaseId?.trim();
-
     if (nextPhase?.startsWith('end')) {
         const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === nextPhase);
         showResult(endContent || calculateEnd());
     } else if (nextPhase) {
         renderPhase(nextPhase);
     } else {
-        const finalEnd = calculateEnd();
-        showResult(finalEnd);
+        showResult(calculateEnd());
     }
 }
 
 function calculateEnd() {
-    if (!gameData.logics || gameData.logics.length === 0) {
-        return gameData.contents.find(c => c.dataType === 'end');
-    }
-    const sortedLogics = gameData.logics.sort((a, b) => a.priority - b.priority);
+    if (!gameData.logics?.length) return gameData.contents.find(c => c.dataType === 'end');
+    const sortedLogics = [...gameData.logics].sort((a, b) => a.priority - b.priority);
     for (const logic of sortedLogics) {
         try {
             if (!logic.condition) continue;
@@ -383,9 +322,7 @@ function calculateEnd() {
             if (eval(condition)) {
                 return gameData.contents.find(c => c.dataType === 'end' && c.endId === logic.endId);
             }
-        } catch (e) {
-            console.error(`Error evaluating condition for endId ${logic.endId}:`, e);
-        }
+        } catch (e) { console.error(`Error in condition for endId ${logic.endId}:`, e); }
     }
     return gameData.contents.find(c => c.dataType === 'end');
 }
@@ -396,15 +333,10 @@ async function displayMessages(description) {
     const formattedDescription = description.replace(/{{userName}}/g, userName || 'あなた');
     if (formattedDescription === lastDisplayedMessage) return;
     lastDisplayedMessage = formattedDescription;
-
     const messages = formattedDescription.split(/<br\s*\/?>/g).filter(m => m.trim());
     for (const msg of messages) {
         const match = msg.trim().match(/^\[(.*?)\](.*)/);
-        if (match) {
-            await displayMessage(match[2].trim(), 'character', match[1]);
-        } else {
-            await displayMessage(msg.trim(), 'system');
-        }
+        await displayMessage(match ? match[2].trim() : msg.trim(), match ? 'character' : 'system', match ? match[1] : '');
         await sleep(800);
     }
 }
@@ -412,19 +344,12 @@ async function displayMessages(description) {
 function displayMessage(text, type = 'system', speaker = '') {
     return new Promise(resolve => {
         const messageWrapper = document.createElement('div');
-        const iconUrl = gameData.speakers ? gameData.speakers[speaker] : null;
-
+        const iconUrl = gameData.speakers?.[speaker];
         if (type === 'character') {
             const isUser = speaker === (userName || 'あなた');
-            const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="${speaker}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">` : `<div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-gray-600 flex-shrink-0 bg-gray-200">${speaker.charAt(0)}</div>`;
-            
+            const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="${speaker}" class="w-10 h-10 rounded-full object-cover">` : `<div class="w-10 h-10 rounded-full flex items-center justify-center font-bold bg-gray-200">${speaker.charAt(0)}</div>`;
             messageWrapper.className = `message flex items-start gap-3 ${isUser ? 'justify-end' : ''}`;
-            const messageContent = `
-                <div class="flex flex-col ${isUser ? 'items-end' : 'items-start'}">
-                    <p class="font-bold text-gray-800">${speaker}</p>
-                    <div class="mt-1 text-white ${isUser ? 'bg-blue-500' : 'bg-gray-500'} rounded-lg p-3 inline-block">${text}</div>
-                </div>
-            `;
+            const messageContent = `<div class="flex flex-col ${isUser ? 'items-end' : 'items-start'}"><p class="font-bold">${speaker}</p><div class="mt-1 text-white ${isUser ? 'bg-blue-500' : 'bg-gray-500'} rounded-lg p-3">${text}</div></div>`;
             messageWrapper.innerHTML = isUser ? messageContent + iconHtml : iconHtml + messageContent;
         } else {
             messageWrapper.className = 'message w-full';
@@ -436,7 +361,39 @@ function displayMessage(text, type = 'system', speaker = '') {
     });
 }
 
-function displayMedia(url) { /* ... 実装は省略 ... */ }
+// ★★★★★【修正済み】★★★★★
+function convertToEmbedUrl(url) {
+    if (!url || typeof url !== 'string') return '';
+    
+    // YouTube
+    let youtubeMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+    if (youtubeMatch) return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
+
+    // Google Drive
+    let driveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (driveMatch) return `https://drive.google.com/file/d/${driveMatch[1]}/embed`;
+
+    return url;
+}
+
+function displayMedia(url) {
+    return new Promise(resolve => {
+        if (!url?.trim()) return resolve();
+        const mediaWrapper = document.createElement('div');
+        mediaWrapper.className = 'message w-full flex justify-center my-4';
+        const isImageUrl = /\.(jpeg|jpg|gif|png|webp|svg)$/i.test(url);
+
+        if (isImageUrl) {
+            mediaWrapper.innerHTML = `<img src="${url}" class="chat-image max-w-full md:max-w-md rounded-lg shadow-md cursor-pointer" alt="コンテンツ画像">`;
+        } else {
+            const embedUrl = convertToEmbedUrl(url);
+            mediaWrapper.innerHTML = `<div class="w-full aspect-video"><iframe class="w-full h-full rounded-lg shadow-md" src="${embedUrl}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+        }
+        chatContainer.appendChild(mediaWrapper);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        setTimeout(resolve, 300);
+    });
+}
 
 function createChoiceButtons(choices) {
     const buttonContainer = document.createElement('div');
@@ -452,84 +409,25 @@ function createChoiceButtons(choices) {
     chatContainer.appendChild(buttonContainer);
 }
 
-// --- Dashboard & Modals ---
-function showDashboard() {
-    screens.dashboard.classList.remove('hidden');
-    renderRadarChart('dashboardRadarChart', scores);
-}
+// --- Modals & Results ---
+function showDashboard() { screens.dashboard.classList.remove('hidden'); renderRadarChart('dashboardRadarChart', scores); }
 function hideDashboard() { screens.dashboard.classList.add('hidden'); }
-function showHint() {
-    const hint = gameData.hints[currentPhaseId.trim()];
-    if (hint) {
-        hintTextEl.textContent = hint;
-        screens.hint.classList.remove('hidden');
-    }
-}
+function showHint() { const hint = gameData.hints[currentPhaseId.trim()]; if (hint) { hintTextEl.textContent = hint; screens.hint.classList.remove('hidden'); } }
 function hideHint() { screens.hint.classList.add('hidden'); }
-
-// --- Results & Certificate ---
-function showResult(endContent) {
-    finalEndContent = endContent;
-    preResultMessageEl.textContent = `${userName}さん、お疲れ様でした！結果を見てみましょう。`;
-    screens.preResult.classList.remove('hidden');
-}
-
-function displayFinalResult() {
-    screens.preResult.classList.add('hidden');
-    showScreen('result');
-    resultTitleEl.textContent = finalEndContent.endTitle || 'シミュレーション終了';
-    resultMessageEl.textContent = (finalEndContent.endMessage || '').replace(/{{userName}}/g, userName || 'あなた');
-    renderRadarChart('resultRadarChart', scores);
-}
-
-function openInterviewLink() {
-    if (gameData.settings?.interviewUrl) {
-        window.open(gameData.settings.interviewUrl, '_blank');
-    } else {
-        alert('面談申し込み用のURLが設定されていません。');
-    }
-}
-
-async function generateCertificate() { /* ... 実装は省略 ... */ }
-
+function showResult(endContent) { finalEndContent = endContent; preResultMessageEl.textContent = `${userName}さん、お疲れ様でした！結果を見てみましょう。`; screens.preResult.classList.remove('hidden'); }
+function displayFinalResult() { screens.preResult.classList.add('hidden'); showScreen('result'); resultTitleEl.textContent = finalEndContent.endTitle || 'シミュレーション終了'; resultMessageEl.textContent = (finalEndContent.endMessage || '').replace(/{{userName}}/g, userName || 'あなた'); renderRadarChart('resultRadarChart', scores); }
+function openInterviewLink() { if (gameData.settings?.interviewUrl) { window.open(gameData.settings.interviewUrl, '_blank'); } else { alert('URLが設定されていません。'); } }
+async function generateCertificate() { alert('修了証を生成中です...'); /* ... 実装 ... */ }
 
 // --- Utilities ---
-function fetchJSONP(url) {
-    return new Promise((resolve, reject) => {
-        const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
-        window[callbackName] = function(data) {
-            delete window[callbackName];
-            document.body.removeChild(script);
-            resolve(data);
-        };
-        const script = document.createElement('script');
-        script.src = `${url}${url.includes('?') ? '&' : '?'}callback=${callbackName}`;
-        script.onerror = () => reject(new Error('Failed to fetch script from GAS.'));
-        document.body.appendChild(script);
-    });
-}
+function fetchJSONP(url) { return new Promise((resolve, reject) => { const cb = 'j' + Math.random().toString(36).substr(2); window[cb] = d => { delete window[cb]; document.body.removeChild(s); resolve(d); }; const s = document.createElement('script'); s.src = `${url}${url.includes('?') ? '&' : '?'}callback=${cb}`; s.onerror = () => reject(new Error('GAS script fetch failed.')); document.body.appendChild(s); }); }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function renderRadarChart(canvasId, data) {
     const ctx = document.getElementById(canvasId).getContext('2d');
     const labels = Object.values(gameData.scoreDefinitions || {});
     const values = Object.keys(gameData.scoreDefinitions || {}).map(key => data[key] || 0);
-
     if (Chart.getChart(canvasId)) Chart.getChart(canvasId).destroy();
-    
-    new Chart(ctx, {
-        type: 'radar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'スコア',
-                data: values,
-                fill: true,
-                backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                borderColor: 'rgb(54, 162, 235)',
-            }]
-        },
-        options: { maintainAspectRatio: false }
-    });
+    new Chart(ctx, { type: 'radar', data: { labels: labels, datasets: [{ label: 'スコア', data: values, fill: true, backgroundColor: 'rgba(54, 162, 235, 0.2)', borderColor: 'rgb(54, 162, 235)' }] }, options: { maintainAspectRatio: false } });
 }
 
 </script>
