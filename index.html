@@ -159,22 +159,29 @@ function receivePreviewData(event) {
 }
 
 // --- Initialization ---
+// ★★★★★【修正済み】★★★★★
 document.addEventListener('DOMContentLoaded', () => {
+    // 1. 最初にイベントリスナーをセットアップ
+    setupEventListeners();
+
+    // 2. 通常モードかプレビューモードかを判断
     if (window.self === window.top) {
+        // 通常モード：GASからデータを取得して開始
         fetchAndInitialize();
     } else {
+        // プレビューモード：管理画面からのデータ受信を待機
         console.log("プレビューモードで待機中...");
     }
 });
 
 async function fetchAndInitialize() {
-    setupEventListeners();
     userNameInput.value = localStorage.getItem('jobsim_userName') || '';
     startButton.disabled = true;
     startButton.textContent = 'データを読み込み中...';
     try {
         const cacheBustingUrl = SPREADSHEET_URL + (SPREADSHEET_URL.includes('?') ? '&' : '?') + 'v=' + new Date().getTime();
         const data = await fetchJSONP(cacheBustingUrl);
+        // 取得したデータでゲームを初期化
         initializeGame(data);
     } catch (error) {
         console.error('ゲームデータの読み込みに失敗しました:', error);
@@ -189,7 +196,7 @@ function initializeGame(data) {
         return;
     }
     gameData = data;
-    resetGame();
+    resetGame(); // ゲームの状態をリセット
     if (!gameData.contents || gameData.contents.length === 0) {
         alert('コンテンツデータが見つかりません。');
         return;
@@ -211,13 +218,12 @@ function initializeGame(data) {
     }
     startButton.textContent = 'シミュレーションを開始';
     validateUserName();
-    if (!window.listenersAttached) {
-        setupEventListeners();
-        window.listenersAttached = true;
-    }
 }
 
 function setupEventListeners() {
+    // 複数回実行されるのを防ぐ
+    if (window.listenersAttached) return;
+
     startButton.addEventListener('click', startGame);
     userNameInput.addEventListener('input', validateUserName);
     dashboardButton.addEventListener('click', showDashboard);
@@ -227,7 +233,16 @@ function setupEventListeners() {
     showResultButton.addEventListener('click', displayFinalResult);
     certificateButton.addEventListener('click', generateCertificate);
     interviewButton.addEventListener('click', openInterviewLink);
-    retryButton.addEventListener('click', () => location.reload());
+    retryButton.addEventListener('click', () => {
+        // プレビューモードならリセット、通常モードならリロード
+        if (window.self === window.top) {
+            location.reload();
+        } else {
+            initializeGame(gameData);
+        }
+    });
+
+    window.listenersAttached = true;
 }
 
 function validateUserName() {
@@ -429,13 +444,13 @@ function hideHint() { screens.hint.classList.add('hidden'); }
 function showResult(endContent) { finalEndContent = endContent; preResultMessageEl.textContent = `${userName}さん、お疲れ様でした！結果を見てみましょう。`; screens.preResult.classList.remove('hidden'); }
 function displayFinalResult() { screens.preResult.classList.add('hidden'); showScreen('result'); resultTitleEl.textContent = finalEndContent.endTitle || 'シミュレーション終了'; resultMessageEl.textContent = (finalEndContent.endMessage || '').replace(/{{userName}}/g, userName || 'あなた'); renderRadarChart('resultRadarChart', scores); }
 function openInterviewLink() { if (gameData.settings?.interviewUrl) { window.open(gameData.settings.interviewUrl, '_blank'); } else { alert('URLが設定されていません。'); } }
-async function generateCertificate() { /* Omitted */ }
+async function generateCertificate() { alert('修了証は現在開発中です。'); }
 
 // --- Utilities ---
 function fetchJSONP(url) { return new Promise((resolve, reject) => { const cb = 'j' + Math.random().toString(36).substr(2); window[cb] = d => { delete window[cb]; document.body.removeChild(s); resolve(d); }; const s = document.createElement('script'); s.src = `${url}${url.includes('?') ? '&' : '?'}callback=${cb}`; s.onerror = () => reject(new Error('GAS script fetch failed.')); document.body.appendChild(s); }); }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function renderRadarChart(canvasId, data) {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const ctx = document.getElementById(canvasId)?.getContext('2d');
     if (!ctx) return;
     const labels = Object.values(gameData.scoreDefinitions || {});
     const values = Object.keys(gameData.scoreDefinitions || {}).map(key => data[key] || 0);
