@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ジョブシミュレーション</title>
+    <!-- (CSSライブラリの読み込みは省略) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style> /* (スタイル定義は省略) */ </style>
+</head>
+<body class="bg-gray-100">
+    <!-- (HTMLの構造は省略) -->
+
+<script>
+// --- Global Variables ---
+const SPREADSHEET_URL = 'https://script.google.com/macros/s/AKfycbwgzBxgmGDIPGqHvAZNzfub7IOWFsBncUCDxm5ml4yISvO7I6UqhgEjnsq6H_9Vi-ESmw/exec'; // ★ ご自身のGAS URL
+let gameData = {};
+// ... (その他のグローバル変数は省略) ...
+
+// ★★★★★【プレビュー機能 ここから】★★★★★
+window.addEventListener('message', receivePreviewData);
+
+function receivePreviewData(event) {
+    // 安全性のため、送信元オリジンを確認することも可能
+    // if (event.origin !== '管理画面のURL') return;
+
+    if (event.data && event.data.type === 'JOB_SIM_PREVIEW_DATA') {
+        console.log('プレビューデータを受信しました:', event.data.payload);
+        // 通常のデータ取得をキャンセルし、受信したデータでゲームを開始
+        initializeGame(event.data.payload);
+    }
+}
+// ★★★★★【プレビュー機能 ここまで】★★★★★
+
+
+// --- Initialization ---
+document.addEventListener('DOMContentLoaded', () => {
+    // プレビューモードでない場合は、通常通りGASからデータを取得
+    if (window.self === window.top) { // iframe外で開かれた場合
+        fetchAndInitialize();
+    }
+});
+
+async function fetchAndInitialize() {
+    setupEventListeners();
+    userNameInput.value = localStorage.getItem('jobsim_userName') || '';
+    
+    startButton.disabled = true;
+    startButton.textContent = 'データを読み込み中...';
+    
+    try {
+        const cacheBustingUrl = SPREADSHEET_URL + (SPREADSHEET_URL.includes('?') ? '&' : '?') + 'v=' + new Date().getTime();
+        const data = await fetchJSONP(cacheBustingUrl);
+        initializeGame(data); // 実際のゲーム初期化処理を呼び出し
+    } catch (error) {
+        // ... (エラー処理は省略) ...
+    }
+}
+
+/**
+ * ゲームのデータとUIを初期化する共通関数
+ * @param {object} data - GASまたはプレビューから受け取ったgameDataオブジェクト
+ */
+function initializeGame(data) {
+    if (data.error) {
+        alert(`GAS Error: ${data.error}`);
+        return;
+    }
+    gameData = data;
+
+    // --- ここから下の処理は、元のinitialize関数の内容とほぼ同じ ---
+    if (!gameData.contents || gameData.contents.length === 0) {
+        alert('「コンテンツデータ」シートが空か、正しく読み込めていません。');
+        return;
+    }
+
+    gameTitleEl.textContent = gameData.settings.gameTitle || 'ジョブシミュレーション';
+    
+    // ロゴやスコアの初期化など
+    // ...
+
+    startButton.textContent = 'シミュレーションを開始';
+    startButton.disabled = false;
+    validateUserName();
+    
+    // イベントリスナーのセットアップ（まだなら）
+    if (!window.listenersAttached) {
+        setupEventListeners();
+        window.listenersAttached = true;
+    }
+}
+
+
+// --- (fetchJSONP, startGame, renderPhaseなどの他の関数は省略) ---
+// Note: 実際のファイルでは省略されている関数もすべて含まれています。
+
+</script>
+</body>
+</html>
