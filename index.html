@@ -366,12 +366,16 @@ function convertToEmbedUrl(url) {
     if (!url || typeof url !== 'string') return '';
     
     // YouTube
-    let youtubeMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+    const youtubeMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
     if (youtubeMatch) return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
 
     // Google Drive
-    let driveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if (driveMatch) return `https://drive.google.com/file/d/${driveMatch[1]}/embed`;
+    const driveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (driveMatch) {
+        // スライドやドキュメント用に、より埋め込みに適したdocs.google.com形式のURLを試します
+        // これが最も汎用性が高い埋め込み形式です
+        return `https://docs.google.com/presentation/d/${driveMatch[1]}/embed?start=false&loop=false&delayms=3000`;
+    }
 
     return url;
 }
@@ -387,13 +391,17 @@ function displayMedia(url) {
             mediaWrapper.innerHTML = `<img src="${url}" class="chat-image max-w-full md:max-w-md rounded-lg shadow-md cursor-pointer" alt="コンテンツ画像">`;
         } else {
             const embedUrl = convertToEmbedUrl(url);
-            mediaWrapper.innerHTML = `<div class="w-full aspect-video"><iframe class="w-full h-full rounded-lg shadow-md" src="${embedUrl}" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>`;
+            // 汎用的なレスポンシブスタイルに変更し、動画専用のallow属性を削除
+            mediaWrapper.innerHTML = `<div class="w-full" style="position: relative; padding-top: 56.25%;">
+                                        <iframe class="w-full h-full rounded-lg shadow-md" style="position: absolute; top: 0; left: 0;" src="${embedUrl}" frameborder="0" allowfullscreen></iframe>
+                                      </div>`;
         }
         chatContainer.appendChild(mediaWrapper);
         chatContainer.scrollTop = chatContainer.scrollHeight;
         setTimeout(resolve, 300);
     });
 }
+
 
 function createChoiceButtons(choices) {
     const buttonContainer = document.createElement('div');
