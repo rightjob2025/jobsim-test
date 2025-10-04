@@ -268,7 +268,11 @@ async function renderPhase(phaseId) {
     currentPhaseId = phaseId;
     phaseTitleEl.textContent = phase.phaseTitle || '';
     await displayMessages(phase.phaseDescription);
+    
+    // ★★★★★【重要】★★★
+    // videoUrlではなく、taskContent列を参照するように修正
     if (phase.taskContent) await displayMedia(phase.taskContent);
+
     chatContainer.scrollTop = chatContainer.scrollHeight;
     const isQuestionPage = phase.taskName?.trim() && phase.choice1_text?.trim();
     hintButton.classList.toggle('hidden', !(isQuestionPage && gameData.hints?.[phaseId.trim()]));
@@ -372,13 +376,15 @@ function convertToEmbedUrl(url) {
     // Google Drive
     const driveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
     if (driveMatch) {
-        // スライドやドキュメント用に、より埋め込みに適したdocs.google.com形式のURLを試します
-        // これが最も汎用性が高い埋め込み形式です
-        return `https://docs.google.com/presentation/d/${driveMatch[1]}/embed?start=false&loop=false&delayms=3000`;
+        // 以前の `/embed` や `/presentation/d/` 形式ではなく、
+        // 共有設定が「リンクを知っている全員」であれば機能する、最もシンプルな `/preview` 形式に戻します。
+        // これで動画やスライド、PDFなど多くのファイルタイプに対応できます。
+        return `https://drive.google.com/file/d/${driveMatch[1]}/preview`;
     }
 
     return url;
 }
+
 
 function displayMedia(url) {
     return new Promise(resolve => {
@@ -391,9 +397,9 @@ function displayMedia(url) {
             mediaWrapper.innerHTML = `<img src="${url}" class="chat-image max-w-full md:max-w-md rounded-lg shadow-md cursor-pointer" alt="コンテンツ画像">`;
         } else {
             const embedUrl = convertToEmbedUrl(url);
-            // 汎用的なレスポンシブスタイルに変更し、動画専用のallow属性を削除
-            mediaWrapper.innerHTML = `<div class="w-full" style="position: relative; padding-top: 56.25%;">
-                                        <iframe class="w-full h-full rounded-lg shadow-md" style="position: absolute; top: 0; left: 0;" src="${embedUrl}" frameborder="0" allowfullscreen></iframe>
+             // 以前の複雑なスタイルから、アスペクト比を維持するシンプルなレスポンシブスタイルに変更
+            mediaWrapper.innerHTML = `<div class="w-full aspect-video">
+                                        <iframe class="w-full h-full rounded-lg shadow-md" src="${embedUrl}" frameborder="0" allowfullscreen></iframe>
                                       </div>`;
         }
         chatContainer.appendChild(mediaWrapper);
@@ -435,7 +441,7 @@ function renderRadarChart(canvasId, data) {
     const labels = Object.values(gameData.scoreDefinitions || {});
     const values = Object.keys(gameData.scoreDefinitions || {}).map(key => data[key] || 0);
     if (Chart.getChart(canvasId)) Chart.getChart(canvasId).destroy();
-    new Chart(ctx, { type: 'radar', data: { labels: labels, datasets: [{ label: 'スコア', data: values, fill: true, backgroundColor: 'rgba(54, 162, 235, 0.2)', borderColor: 'rgb(54, 162, 235)' }] }, options: { maintainAspectRatio: false } });
+    new Chart(ctx, { type: 'radar', data: { labels: labels, datasets: [{ label: 'スコア', data: values, fill: true, backgroundColor: 'rgba(54, 162, 23_5, 0.2)', borderColor: 'rgb(54, 162, 235)' }] }, options: { maintainAspectRatio: false } });
 }
 
 </script>
