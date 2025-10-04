@@ -4,32 +4,167 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ジョブシミュレーション</title>
-    <!-- (CSSライブラリの読み込みは省略) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF Generation Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- Chart.js (for radar charts) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style> /* (スタイル定義は省略) */ </style>
+    <style>
+        /* Base Styles */
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+        }
+        /* Scrollbar Styles */
+        .chat-container::-webkit-scrollbar { width: 8px; }
+        .chat-container::-webkit-scrollbar-track { background: #f1f1f1; }
+        .chat-container::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        .chat-container::-webkit-scrollbar-thumb:hover { background: #555; }
+        /* Message Animation */
+        .message { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* Choice Button Styles */
+        .choice-button { transition: all 0.2s ease-in-out; }
+        .choice-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
-    <!-- (HTMLの構造は省略) -->
+
+    <div id="app" class="max-w-4xl mx-auto h-screen flex flex-col p-4">
+
+        <!-- Top Screen -->
+        <div id="screen-top" class="flex flex-col items-center justify-start pt-20 h-full">
+            <img id="topLogo" src="" alt="Company Logo" class="h-16 mb-6 hidden">
+            <h1 id="gameTitle" class="text-4xl font-bold text-gray-800 mb-4 text-center"></h1>
+            <p class="text-gray-600 mb-8">あなたのキャリアを選択するシミュレーションゲーム</p>
+            <div class="w-full max-w-sm">
+                 <input type="text" id="userName" placeholder="あなたの名前を入力してください" class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 text-lg">
+                 <button id="startButton" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition duration-300 shadow-lg text-lg disabled:bg-gray-400">シミュレーションを開始</button>
+            </div>
+        </div>
+
+        <!-- Game Screen (Chat UI) -->
+        <div id="screen-game" class="hidden h-full w-full flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <header class="bg-gray-800 text-white p-4 flex justify-between items-center shadow-md z-10">
+                <div class="flex items-center gap-4">
+                    <img id="headerLogo" src="" alt="Company Logo" class="h-8 hidden">
+                    <h2 id="phaseTitle" class="text-lg font-bold"></h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="hintButton" class="hidden bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg text-sm">ガイド</button>
+                    <button id="dashboardButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg text-sm">スコア確認</button>
+                </div>
+            </header>
+            
+            <main id="chat-container" class="chat-container flex-1 p-6 overflow-y-auto space-y-6">
+                <!-- Messages and choices will be dynamically added here -->
+            </main>
+        </div>
+
+        <!-- Dashboard Screen -->
+        <div id="screen-dashboard" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md m-4">
+                <h2 class="text-2xl font-bold mb-4 text-gray-800">現在のスコア</h2>
+                <div style="width: 100%; height: 300px;">
+                    <canvas id="dashboardRadarChart"></canvas>
+                </div>
+                <div class="mt-6 text-center">
+                    <button id="closeDashboardButton" class="bg-gray-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-700 transition duration-300">閉じる</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Guide Display Modal -->
+        <div id="screen-hint" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md m-4">
+                <h2 class="text-2xl font-bold mb-4 text-gray-800">ガイド</h2>
+                <div id="hintText" class="text-gray-600 mb-6 whitespace-pre-wrap"></div>
+                <div class="mt-6 text-center">
+                    <button id="closeHintButton" class="bg-gray-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-700 transition duration-300">閉じる</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pre-Result Modal -->
+        <div id="screen-pre-result" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-end justify-center z-50 pb-20">
+            <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md m-4 text-center">
+                <p id="preResultMessage" class="text-2xl font-bold mb-8 text-gray-800"></p>
+                <button id="showResultButton" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition duration-300 shadow-lg">結果を見る</button>
+            </div>
+        </div>
+
+        <!-- Result Screen -->
+        <div id="screen-result" class="hidden flex-col items-center justify-center h-full p-4">
+            <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-2xl text-center">
+                <h2 id="resultTitle" class="text-3xl font-bold text-gray-800 mb-4"></h2>
+                <div id="resultMessage" class="text-gray-600 mb-6 text-left whitespace-pre-wrap"></div>
+                <div class="my-6">
+                    <canvas id="resultRadarChart"></canvas>
+                </div>
+                <div class="mt-8 flex flex-wrap justify-center gap-4">
+                    <button id="certificateButton" class="bg-green-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-green-700 transition duration-300 shadow-lg">修了証を発行する</button>
+                    <button id="interviewButton" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition duration-300 shadow-lg">企業へ応募する</button>
+                    <button id="retryButton" class="bg-gray-500 text-white font-bold py-3 px-8 rounded-lg hover:bg-gray-600 transition duration-300 shadow-lg">もう一度挑戦する</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
 <script>
 // --- Global Variables ---
-const SPREADSHEET_URL = 'https://script.google.com/macros/s/AKfycbwgzBxgmGDIPGqHvAZNzfub7IOWFsBncUCDxm5ml4yISvO7I6UqhgEjnsq6H_9Vi-ESmw/exec'; // ★ ご自身のGAS URL
+// ★★★★★【要設定】★★★★★
+// 通常モードで使用するGASのURL。プレビュー時はこのURLは使われません。
+const SPREADSHEET_URL = 'https://script.google.com/macros/s/AKfycbxgj4EEtzSq8WcRlBG9uMUzDYN-GI2HtQ8J2yC9b9VZmpMhYLeb1g9kdCbJKDL0mQRY5g/exec';
+
 let gameData = {};
-// ... (その他のグローバル変数は省略) ...
+let scores = {};
+let userName = '';
+let currentPhaseId = 'prologue'; // Starting phase ID
+let finalEndContent = null;
+let lastDisplayedMessage = '';
+
+// --- DOM Elements ---
+const screens = {
+    top: document.getElementById('screen-top'),
+    game: document.getElementById('screen-game'),
+    dashboard: document.getElementById('screen-dashboard'),
+    hint: document.getElementById('screen-hint'),
+    preResult: document.getElementById('screen-pre-result'),
+    result: document.getElementById('screen-result'),
+};
+const gameTitleEl = document.getElementById('gameTitle');
+const userNameInput = document.getElementById('userName');
+const startButton = document.getElementById('startButton');
+const chatContainer = document.getElementById('chat-container');
+const phaseTitleEl = document.getElementById('phaseTitle');
+const dashboardButton = document.getElementById('dashboardButton');
+const closeDashboardButton = document.getElementById('closeDashboardButton');
+const hintButton = document.getElementById('hintButton');
+const closeHintButton = document.getElementById('closeHintButton');
+const hintTextEl = document.getElementById('hintText');
+const preResultMessageEl = document.getElementById('preResultMessage');
+const showResultButton = document.getElementById('showResultButton');
+const resultTitleEl = document.getElementById('resultTitle');
+const resultMessageEl = document.getElementById('resultMessage');
+const certificateButton = document.getElementById('certificateButton');
+const interviewButton = document.getElementById('interviewButton');
+const retryButton = document.getElementById('retryButton');
+
 
 // ★★★★★【プレビュー機能 ここから】★★★★★
 window.addEventListener('message', receivePreviewData);
 
 function receivePreviewData(event) {
-    // 安全性のため、送信元オリジンを確認することも可能
-    // if (event.origin !== '管理画面のURL') return;
-
     if (event.data && event.data.type === 'JOB_SIM_PREVIEW_DATA') {
         console.log('プレビューデータを受信しました:', event.data.payload);
-        // 通常のデータ取得をキャンセルし、受信したデータでゲームを開始
+        // 通常のデータ取得をキャンセルし、受信したデータでゲームを初期化
         initializeGame(event.data.payload);
     }
 }
@@ -38,12 +173,19 @@ function receivePreviewData(event) {
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
-    // プレビューモードでない場合は、通常通りGASからデータを取得
-    if (window.self === window.top) { // iframe外で開かれた場合
+    // 自身がiframe内にあるかどうかで動作を切り替える
+    // iframe内の場合は管理画面からのメッセージを待つ。
+    // そうでない場合（通常アクセス）はGASからデータをフェッチする。
+    if (window.self === window.top) {
         fetchAndInitialize();
+    } else {
+        // iframe内の場合、リスナーは既にセットされているので何もしない。
+        // 管理画面からのデータ受信を待つ。
+        console.log("プレビューモードで待機中...");
     }
 });
 
+// 通常モード時にGASからデータを取得して初期化
 async function fetchAndInitialize() {
     setupEventListeners();
     userNameInput.value = localStorage.getItem('jobsim_userName') || '';
@@ -54,9 +196,11 @@ async function fetchAndInitialize() {
     try {
         const cacheBustingUrl = SPREADSHEET_URL + (SPREADSHEET_URL.includes('?') ? '&' : '?') + 'v=' + new Date().getTime();
         const data = await fetchJSONP(cacheBustingUrl);
-        initializeGame(data); // 実際のゲーム初期化処理を呼び出し
+        initializeGame(data);
     } catch (error) {
-        // ... (エラー処理は省略) ...
+        console.error('ゲームデータの読み込みに失敗しました:', error);
+        alert('ゲームデータの読み込みに失敗しました。\n' + error.message);
+        startButton.textContent = '読み込みエラー';
     }
 }
 
@@ -66,37 +210,329 @@ async function fetchAndInitialize() {
  */
 function initializeGame(data) {
     if (data.error) {
-        alert(`GAS Error: ${data.error}`);
+        alert(`データエラー: ${data.error}`);
         return;
     }
     gameData = data;
+    
+    // UIのリセット
+    resetGame();
 
-    // --- ここから下の処理は、元のinitialize関数の内容とほぼ同じ ---
     if (!gameData.contents || gameData.contents.length === 0) {
-        alert('「コンテンツデータ」シートが空か、正しく読み込めていません。');
+        alert('コンテンツデータが見つかりません。');
         return;
     }
 
     gameTitleEl.textContent = gameData.settings.gameTitle || 'ジョブシミュレーション';
     
-    // ロゴやスコアの初期化など
-    // ...
+    if (gameData.settings.companyLogoUrl) {
+        const topLogo = document.getElementById('topLogo');
+        const headerLogo = document.getElementById('headerLogo');
+        topLogo.src = gameData.settings.companyLogoUrl;
+        headerLogo.src = gameData.settings.companyLogoUrl;
+        topLogo.classList.remove('hidden');
+        headerLogo.classList.remove('hidden');
+    }
+
+    // スコアの初期化
+    scores = {};
+    if(gameData.scoreDefinitions) {
+        Object.keys(gameData.scoreDefinitions).forEach(key => {
+            scores[key] = 0;
+        });
+    }
 
     startButton.textContent = 'シミュレーションを開始';
-    startButton.disabled = false;
     validateUserName();
     
-    // イベントリスナーのセットアップ（まだなら）
     if (!window.listenersAttached) {
         setupEventListeners();
         window.listenersAttached = true;
     }
 }
 
+function setupEventListeners() {
+    startButton.addEventListener('click', startGame);
+    userNameInput.addEventListener('input', validateUserName);
+    dashboardButton.addEventListener('click', showDashboard);
+    closeDashboardButton.addEventListener('click', hideDashboard);
+    hintButton.addEventListener('click', showHint);
+    closeHintButton.addEventListener('click', hideHint);
+    showResultButton.addEventListener('click', displayFinalResult);
+    certificateButton.addEventListener('click', generateCertificate);
+    interviewButton.addEventListener('click', openInterviewLink);
+    retryButton.addEventListener('click', () => location.reload());
+}
 
-// --- (fetchJSONP, startGame, renderPhaseなどの他の関数は省略) ---
-// Note: 実際のファイルでは省略されている関数もすべて含まれています。
+function validateUserName() {
+    startButton.disabled = !userNameInput.value.trim() || !gameData.settings;
+}
+
+// --- Screen Transitions ---
+function showScreen(screenName) {
+    Object.values(screens).forEach(screen => screen.classList.add('hidden'));
+    screens[screenName].classList.remove('hidden');
+    if (['top', 'game', 'result'].includes(screenName)) {
+        screens[screenName].classList.add('flex');
+    }
+}
+
+// --- Game Logic ---
+function startGame() {
+    userName = userNameInput.value.trim();
+    localStorage.setItem('jobsim_userName', userName);
+    showScreen('game');
+    renderPhase(currentPhaseId);
+}
+
+function resetGame() {
+    currentPhaseId = 'prologue';
+    scores = {};
+    chatContainer.innerHTML = '';
+    showScreen('top');
+}
+
+
+async function renderPhase(phaseId) {
+    const phase = gameData.contents.find(p => p.phaseId && String(p.phaseId).trim() === String(phaseId).trim());
+    if (!phase) {
+        console.error(`Phase data not found for ID: '${phaseId}'`);
+        const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === phaseId);
+        if(endContent) {
+            showResult(endContent);
+        } else {
+             alert(`次のコンテンツが見つかりません。(ID: ${phaseId})`);
+        }
+        return;
+    }
+
+    currentPhaseId = phaseId;
+    phaseTitleEl.textContent = phase.phaseTitle || '';
+
+    await displayMessages(phase.phaseDescription);
+    
+    if (phase.taskContent) await displayMedia(phase.taskContent);
+
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    const isQuestionPage = phase.taskName && phase.taskName.trim() !== '' && phase.choice1_text && phase.choice1_text.trim() !== '';
+    hintButton.classList.toggle('hidden', !(isQuestionPage && gameData.hints && gameData.hints[phaseId.trim()]));
+
+    if (isQuestionPage) {
+        await displayMessage(phase.taskName, 'system');
+        
+        const choices = [];
+        for (let i = 1; i <= 3; i++) {
+            if (phase[`choice${i}_text`]?.trim()) {
+                choices.push({
+                    text: phase[`choice${i}_text`],
+                    score: JSON.parse(phase[`choice${i}_score`] || '{}'),
+                    nextPhaseId: phase[`choice${i}_nextPhaseId`],
+                    message: phase[`choice${i}_message`]
+                });
+            }
+        }
+        createChoiceButtons(choices);
+    } else {
+        const nextPhaseId = phase.choice1_nextPhaseId;
+        if (nextPhaseId?.trim()) {
+            await sleep(1500);
+            renderPhase(nextPhaseId.trim());
+        } else {
+             const finalEnd = calculateEnd();
+             showResult(finalEnd);
+        }
+    }
+}
+
+async function handleChoice(choice) {
+    document.getElementById('button-wrapper')?.remove();
+
+    await displayMessage(choice.text, 'character', userName || 'あなた');
+
+    Object.keys(choice.score).forEach(key => {
+        scores[key] = (scores[key] || 0) + Number(choice.score[key] || 0);
+    });
+
+    if (choice.message) await displayMessages(choice.message);
+    
+    await sleep(1000);
+
+    const nextPhase = choice.nextPhaseId?.trim();
+
+    if (nextPhase?.startsWith('end')) {
+        const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === nextPhase);
+        showResult(endContent || calculateEnd());
+    } else if (nextPhase) {
+        renderPhase(nextPhase);
+    } else {
+        const finalEnd = calculateEnd();
+        showResult(finalEnd);
+    }
+}
+
+function calculateEnd() {
+    if (!gameData.logics || gameData.logics.length === 0) {
+        return gameData.contents.find(c => c.dataType === 'end');
+    }
+    const sortedLogics = gameData.logics.sort((a, b) => a.priority - b.priority);
+    for (const logic of sortedLogics) {
+        try {
+            if (!logic.condition) continue;
+            const condition = logic.condition.replace(/([a-zA-Z_]\w*)/g, match => `(scores['${match}'] || 0)`);
+            if (eval(condition)) {
+                return gameData.contents.find(c => c.dataType === 'end' && c.endId === logic.endId);
+            }
+        } catch (e) {
+            console.error(`Error evaluating condition for endId ${logic.endId}:`, e);
+        }
+    }
+    return gameData.contents.find(c => c.dataType === 'end');
+}
+
+// --- UI Generation ---
+async function displayMessages(description) {
+    if (!description?.trim()) return;
+    const formattedDescription = description.replace(/{{userName}}/g, userName || 'あなた');
+    if (formattedDescription === lastDisplayedMessage) return;
+    lastDisplayedMessage = formattedDescription;
+
+    const messages = formattedDescription.split(/<br\s*\/?>/g).filter(m => m.trim());
+    for (const msg of messages) {
+        const match = msg.trim().match(/^\[(.*?)\](.*)/);
+        if (match) {
+            await displayMessage(match[2].trim(), 'character', match[1]);
+        } else {
+            await displayMessage(msg.trim(), 'system');
+        }
+        await sleep(800);
+    }
+}
+
+function displayMessage(text, type = 'system', speaker = '') {
+    return new Promise(resolve => {
+        const messageWrapper = document.createElement('div');
+        const iconUrl = gameData.speakers ? gameData.speakers[speaker] : null;
+
+        if (type === 'character') {
+            const isUser = speaker === (userName || 'あなた');
+            const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="${speaker}" class="w-10 h-10 rounded-full object-cover flex-shrink-0">` : `<div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-gray-600 flex-shrink-0 bg-gray-200">${speaker.charAt(0)}</div>`;
+            
+            messageWrapper.className = `message flex items-start gap-3 ${isUser ? 'justify-end' : ''}`;
+            const messageContent = `
+                <div class="flex flex-col ${isUser ? 'items-end' : 'items-start'}">
+                    <p class="font-bold text-gray-800">${speaker}</p>
+                    <div class="mt-1 text-white ${isUser ? 'bg-blue-500' : 'bg-gray-500'} rounded-lg p-3 inline-block">${text}</div>
+                </div>
+            `;
+            messageWrapper.innerHTML = isUser ? messageContent + iconHtml : iconHtml + messageContent;
+        } else {
+            messageWrapper.className = 'message w-full';
+            messageWrapper.innerHTML = `<div class="text-gray-800 bg-gray-200 border-l-4 border-gray-400 p-3">${text}</div>`;
+        }
+        chatContainer.appendChild(messageWrapper);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+        setTimeout(resolve, 300);
+    });
+}
+
+function displayMedia(url) { /* ... 実装は省略 ... */ }
+
+function createChoiceButtons(choices) {
+    const buttonContainer = document.createElement('div');
+    buttonContainer.id = 'button-wrapper';
+    buttonContainer.className = 'message grid grid-cols-1 gap-3 py-4';
+    choices.forEach(choice => {
+        const button = document.createElement('button');
+        button.className = 'choice-button w-full bg-white text-blue-600 font-semibold py-3 px-4 border-2 border-blue-500 rounded-lg hover:bg-blue-50';
+        button.textContent = choice.text;
+        button.onclick = () => handleChoice(choice);
+        buttonContainer.appendChild(button);
+    });
+    chatContainer.appendChild(buttonContainer);
+}
+
+// --- Dashboard & Modals ---
+function showDashboard() {
+    screens.dashboard.classList.remove('hidden');
+    renderRadarChart('dashboardRadarChart', scores);
+}
+function hideDashboard() { screens.dashboard.classList.add('hidden'); }
+function showHint() {
+    const hint = gameData.hints[currentPhaseId.trim()];
+    if (hint) {
+        hintTextEl.textContent = hint;
+        screens.hint.classList.remove('hidden');
+    }
+}
+function hideHint() { screens.hint.classList.add('hidden'); }
+
+// --- Results & Certificate ---
+function showResult(endContent) {
+    finalEndContent = endContent;
+    preResultMessageEl.textContent = `${userName}さん、お疲れ様でした！結果を見てみましょう。`;
+    screens.preResult.classList.remove('hidden');
+}
+
+function displayFinalResult() {
+    screens.preResult.classList.add('hidden');
+    showScreen('result');
+    resultTitleEl.textContent = finalEndContent.endTitle || 'シミュレーション終了';
+    resultMessageEl.textContent = (finalEndContent.endMessage || '').replace(/{{userName}}/g, userName || 'あなた');
+    renderRadarChart('resultRadarChart', scores);
+}
+
+function openInterviewLink() {
+    if (gameData.settings?.interviewUrl) {
+        window.open(gameData.settings.interviewUrl, '_blank');
+    } else {
+        alert('面談申し込み用のURLが設定されていません。');
+    }
+}
+
+async function generateCertificate() { /* ... 実装は省略 ... */ }
+
+
+// --- Utilities ---
+function fetchJSONP(url) {
+    return new Promise((resolve, reject) => {
+        const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
+        window[callbackName] = function(data) {
+            delete window[callbackName];
+            document.body.removeChild(script);
+            resolve(data);
+        };
+        const script = document.createElement('script');
+        script.src = `${url}${url.includes('?') ? '&' : '?'}callback=${callbackName}`;
+        script.onerror = () => reject(new Error('Failed to fetch script from GAS.'));
+        document.body.appendChild(script);
+    });
+}
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+function renderRadarChart(canvasId, data) {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    const labels = Object.values(gameData.scoreDefinitions || {});
+    const values = Object.keys(gameData.scoreDefinitions || {}).map(key => data[key] || 0);
+
+    if (Chart.getChart(canvasId)) Chart.getChart(canvasId).destroy();
+    
+    new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'スコア',
+                data: values,
+                fill: true,
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgb(54, 162, 235)',
+            }]
+        },
+        options: { maintainAspectRatio: false }
+    });
+}
 
 </script>
 </body>
 </html>
+
