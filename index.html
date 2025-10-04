@@ -269,8 +269,6 @@ async function renderPhase(phaseId) {
     phaseTitleEl.textContent = phase.phaseTitle || '';
     await displayMessages(phase.phaseDescription);
     
-    // ★★★★★【重要】★★★
-    // videoUrlではなく、taskContent列を参照するように修正
     if (phase.taskContent) await displayMedia(phase.taskContent);
 
     chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -365,23 +363,29 @@ function displayMessage(text, type = 'system', speaker = '') {
     });
 }
 
-// ★★★★★【修正済み】★★★★★
+// ★★★★★【改善版】★★★★★
 function convertToEmbedUrl(url) {
     if (!url || typeof url !== 'string') return '';
     
     // YouTube
     const youtubeMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
-    if (youtubeMatch) return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
-
-    // Google Drive
-    const driveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if (driveMatch) {
-        // 以前の `/embed` や `/presentation/d/` 形式ではなく、
-        // 共有設定が「リンクを知っている全員」であれば機能する、最もシンプルな `/preview` 形式に戻します。
-        // これで動画やスライド、PDFなど多くのファイルタイプに対応できます。
-        return `https://drive.google.com/file/d/${driveMatch[1]}/preview`;
+    if (youtubeMatch) {
+        return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
     }
 
+    // Google Drive (Slides, Docs, Sheets, etc.)
+    const driveMatch = url.match(/drive\.google\.com\/(?:file\/d\/|presentation\/d\/|spreadsheets\/d\/|document\/d\/)([a-zA-Z0-9_-]+)/);
+    if (driveMatch) {
+        const fileId = driveMatch[1];
+        // プレゼンテーション（スライド）用の埋め込みURLを生成
+        if (url.includes('/presentation/d/')) {
+             return `https://docs.google.com/presentation/d/${fileId}/embed?start=false&loop=false&delayms=3000`;
+        }
+        // その他のファイル（動画、PDFなど）はpreview形式で埋め込む
+        return `https://drive.google.com/file/d/${fileId}/preview`;
+    }
+
+    // If it's some other URL, return it as is
     return url;
 }
 
@@ -397,7 +401,6 @@ function displayMedia(url) {
             mediaWrapper.innerHTML = `<img src="${url}" class="chat-image max-w-full md:max-w-md rounded-lg shadow-md cursor-pointer" alt="コンテンツ画像">`;
         } else {
             const embedUrl = convertToEmbedUrl(url);
-             // 以前の複雑なスタイルから、アスペクト比を維持するシンプルなレスポンシブスタイルに変更
             mediaWrapper.innerHTML = `<div class="w-full aspect-video">
                                         <iframe class="w-full h-full rounded-lg shadow-md" src="${embedUrl}" frameborder="0" allowfullscreen></iframe>
                                       </div>`;
@@ -441,7 +444,7 @@ function renderRadarChart(canvasId, data) {
     const labels = Object.values(gameData.scoreDefinitions || {});
     const values = Object.keys(gameData.scoreDefinitions || {}).map(key => data[key] || 0);
     if (Chart.getChart(canvasId)) Chart.getChart(canvasId).destroy();
-    new Chart(ctx, { type: 'radar', data: { labels: labels, datasets: [{ label: 'スコア', data: values, fill: true, backgroundColor: 'rgba(54, 162, 23_5, 0.2)', borderColor: 'rgb(54, 162, 235)' }] }, options: { maintainAspectRatio: false } });
+    new Chart(ctx, { type: 'radar', data: { labels: labels, datasets: [{ label: 'スコア', data: values, fill: true, backgroundColor: 'rgba(54, 162, 235, 0.2)', borderColor: 'rgb(54, 162, 235)' }] }, options: { maintainAspectRatio: false } });
 }
 
 </script>
