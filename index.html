@@ -80,7 +80,6 @@
 <script>
 // ★★★★★【注意】★★★★★
 // このファイルはプレビュー専用です。本番では`jobsim_production.html`をご利用ください。
-// GAS_URLとSPREADSHEET_IDは、プレビューモードでない場合のみ使用されます。
 const GAS_URL = 'https://script.google.com/macros/s/AKfycby5J6CR-pgF8imIIlmGagEnSaXLzrzmWpubR9gg_VcwILRvvnUhtJ0BVCTXhk5anvsL/exec';
 const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';
 
@@ -122,7 +121,6 @@ const confirmRetryNo = document.getElementById('confirmRetryNo');
 // ★★★★★【プレビュー機能】★★★★★
 window.addEventListener('message', receivePreviewData);
 function receivePreviewData(event) {
-    // 安全性のため、送信元オリジンを確認することも可能です
     if (event.data && event.data.type === 'JOB_SIM_PREVIEW_DATA') {
         console.log('プレビューデータを受信しました:', event.data.payload);
         initializeGame(event.data.payload);
@@ -131,15 +129,10 @@ function receivePreviewData(event) {
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
-    // 最初に一度だけイベントリスナーを設定
     setupEventListeners();
-
-    // 通常モードかプレビューモードかを判断
     if (window.self === window.top) {
-        // 通常モード：GASからデータを取得して開始
         fetchAndInitialize();
     } else {
-        // プレビューモード：管理画面からのデータ受信を待機
         console.log("プレビューモードで待機中...");
     }
 });
@@ -230,7 +223,7 @@ function validateUserName() { startButton.disabled = !userNameInput.value.trim()
 function showScreen(screenName) { Object.values(screens).forEach(screen => screen.classList.add('hidden')); screens[screenName].classList.remove('hidden'); if (['top', 'game', 'result'].includes(screenName)) { screens[screenName].classList.add('flex'); } }
 function startGame() { userName = userNameInput.value.trim(); localStorage.setItem('jobsim_userName', userName); showScreen('game'); renderPhase(currentPhaseId); }
 function resetGame() { currentPhaseId = 'prologue'; scores = {}; chatContainer.innerHTML = ''; showScreen('top'); }
-async function renderPhase(phaseId) { const phase = gameData.contents.find(p => p.phaseId?.trim() === phaseId?.trim()); if (!phase) { const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === phaseId); if(endContent) { showResult(endContent); } else { alert(`次のコンテンツが見つかりません。(ID: ${phaseId})`); } return; } currentPhaseId = phaseId; phaseTitleEl.textContent = phase.phaseTitle || ''; await displayMessages(phase.phaseDescription); if (phase.taskContent) await displayMedia(phase.taskContent); chatContainer.scrollTop = chatContainer.scrollHeight; const isQuestionPage = phase.taskName?.trim() && phase.choice1_text?.trim(); hintButton.classList.toggle('hidden', !(isQuestionPage && gameData.hints?.[phaseId.trim()])); if (isQuestionPage) { await displayMessage(phase.taskName, 'system'); const choices = []; for (let i = 1; i <= 3; i++) { if (phase[`choice${i}_text`]?.trim()) { choices.push({ text: phase[`choice${i}_text`], score: JSON.parse(phase[`choice${i}_score`] || '{}'), nextPhaseId: phase[`choice${i}_nextPhaseId`], message: phase[`choice${i}_message`] }); } } createChoiceButtons(choices); } else { const nextPhaseId = phase.choice1_nextPhaseId; if (nextPhaseId?.trim()) { const delay = Number(gameData.settings.sleepNext) || 1500; await sleep(delay); renderPhase(nextPhaseId.trim()); } else { showResult(calculateEnd()); } } }
+async function renderPhase(phaseId) { const phase = gameData.contents.find(p => p.phaseId?.trim() === phaseId?.trim()); if (!phase) { const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === phaseId); if(endContent) { showResult(endContent); } else { alert(`次のコンテンツが見つかりません。(ID: ${phaseId})`); } return; } currentPhaseId = phaseId; phaseTitleEl.textContent = phase.phaseTitle || ''; await displayMessages(phase.phaseDescription); if (phase.taskContent) await displayMedia(phase.taskContent); chatContainer.scrollTop = chatContainer.scrollHeight; const isQuestionPage = phase.taskName?.trim() && phase.choice1_text?.trim(); hintButton.classList.toggle('hidden', !(isQuestionPage && gameData.hints?.[phaseId.trim()])); if (isQuestionPage) { await displayMessage(phase.taskName, 'system'); let choices = []; for (let i = 1; i <= 3; i++) { if (phase[`choice${i}_text`]?.trim()) { choices.push({ text: phase[`choice${i}_text`], score: JSON.parse(phase[`choice${i}_score`] || '{}'), nextPhaseId: phase[`choice${i}_nextPhaseId`], message: phase[`choice${i}_message`] }); } } choices = shuffle(choices); createChoiceButtons(choices); } else { const nextPhaseId = phase.choice1_nextPhaseId; if (nextPhaseId?.trim()) { const delay = Number(gameData.settings.sleepNext) || 1500; await sleep(delay); renderPhase(nextPhaseId.trim()); } else { showResult(calculateEnd()); } } }
 async function handleChoice(choice) { document.getElementById('button-wrapper')?.remove(); await displayMessage(choice.text, 'character', userName || 'あなた'); Object.keys(choice.score).forEach(key => { scores[key] = (scores[key] || 0) + Number(choice.score[key] || 0); }); if (choice.message) await displayMessages(choice.message); const delay = Number(gameData.settings.sleepChoice) || 1000; await sleep(delay); const nextPhase = choice.nextPhaseId?.trim(); if (nextPhase?.startsWith('end')) { const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === nextPhase); showResult(endContent || calculateEnd()); } else if (nextPhase) { renderPhase(nextPhase); } else { showResult(calculateEnd()); } }
 function calculateEnd() { if (!gameData.logics?.length) return gameData.contents.find(c => c.dataType === 'end'); const sortedLogics = [...gameData.logics].sort((a, b) => a.priority - b.priority); for (const logic of sortedLogics) { try { if (!logic.condition) continue; const condition = String(logic.condition).replace(/([a-zA-Z_]\w*)/g, match => `(scores['${match}'] || 0)`); if (eval(condition)) { return gameData.contents.find(c => c.dataType === 'end' && c.endId === logic.endId); } } catch (e) { console.error(`Error in condition for endId ${logic.endId}:`, e); } } return gameData.contents.find(c => c.dataType === 'end'); }
 async function displayMessages(description) { if (!description?.trim()) return; const formattedDescription = description.replace(/{{userName}}/g, userName || 'あなた'); if (formattedDescription === lastDisplayedMessage) return; lastDisplayedMessage = formattedDescription; const messages = formattedDescription.split(/<br\s*\/?>/g).filter(m => m.trim()); for (const msg of messages) { const match = msg.trim().match(/^\[(.*?)\](.*)/); await displayMessage(match ? match[2].trim() : msg.trim(), match ? 'character' : 'system', match ? match[1] : ''); const delay = Number(gameData.settings.sleepMessage) || 800; await sleep(delay); } }
@@ -269,6 +262,15 @@ function openInterviewLink() { if (gameData.settings?.interviewUrl) { window.ope
 async function generateCertificate() { alert('修了証は現在開発中です。'); }
 function fetchJSONP(url) { return new Promise((resolve, reject) => { const cb = 'j' + Math.random().toString(36).substr(2); window[cb] = d => { delete window[cb]; document.body.removeChild(s); resolve(d); }; const s = document.createElement('script'); s.src = `${url}&callback=${cb}`; s.onerror = () => reject(new Error('GAS script fetch failed.')); document.body.appendChild(s); }); }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+function shuffle(array) {
+    let currentIndex = array.length,  randomIndex;
+    while (currentIndex > 0) {
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+        [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+    }
+    return array;
+}
 function renderRadarChart(canvasId, data) { const ctx = document.getElementById(canvasId)?.getContext('2d'); if (!ctx) return; const labels = Object.values(gameData.scoreDefinitions || {}); const values = Object.keys(gameData.scoreDefinitions || {}).map(key => data[key] || 0); if (Chart.getChart(canvasId)) Chart.getChart(canvasId).destroy(); new Chart(ctx, { type: 'radar', data: { labels: labels, datasets: [{ label: 'スコア', data: values, fill: true, backgroundColor: 'rgba(54, 162, 235, 0.2)', borderColor: 'rgb(54, 162, 235)' }] }, options: { maintainAspectRatio: false } }); }
 
 </script>
