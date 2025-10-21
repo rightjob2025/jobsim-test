@@ -3,276 +3,445 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ジョブシミュレーション（プレビュー）</title>
-    <!-- Tailwind CSS -->
+    <title>Jobsim 管理画面</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PDF Generation Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- Chart.js (for radar charts) -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; }
-        .chat-container::-webkit-scrollbar { width: 8px; }
-        .chat-container::-webkit-scrollbar-track { background: #f1f1f1; }
-        .chat-container::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
-        .message { animation: fadeIn 0.5s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .choice-button { transition: all 0.2s ease-in-out; }
-        .choice-button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .table-container { max-height: calc(100vh - 300px); overflow-y: auto; }
+        td, th { padding: 8px; border: 1px solid #ddd; min-width: 150px; vertical-align: top; }
+        textarea, input[type="text"], input[type="password"] { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        
+        #admin-panel-container { display: flex; height: 100vh; }
+        #editor-pane { padding: 1rem; overflow-y: auto; }
+        #resizer { width: 10px; cursor: col-resize; background-color: #e5e7eb; position: relative; transition: background-color 0.2s; }
+        #resizer:hover { background-color: #9ca3af; }
+        #preview-pane { display: flex; flex-direction: column; }
+        #preview-iframe { flex-grow: 1; border: none; }
     </style>
 </head>
-<body class="bg-gray-100 flex flex-col min-h-screen">
+<body class="bg-gray-100 overflow-hidden">
 
-    <header id="main-header" class="w-full bg-white shadow-md p-3 px-6 flex justify-between items-center sticky top-0 z-20">
-        <div class="flex items-center gap-4">
-            <img id="main-header-logo" src="" alt="Company Logo" class="h-10 hidden">
-            <span id="main-header-company-name" class="text-xl font-bold text-gray-700"></span>
-        </div>
-    </header>
-    
-    <div id="app" class="max-w-4xl mx-auto w-full flex-grow flex flex-col p-4">
-        <div id="screen-top" class="flex flex-col items-center justify-start pt-20 h-full">
-            <img id="topLogo" src="" alt="Company Logo" class="h-16 mb-6 hidden">
-            <h1 id="gameTitle" class="text-4xl font-bold text-gray-800 mb-4 text-center"></h1>
-            <p class="text-gray-600 mb-8">あなたのキャリアを選択するシミュレーションゲーム</p>
-            <div class="w-full max-w-sm">
-                 <input type="text" id="userName" placeholder="あなたの名前を入力してください" class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 text-lg">
-                 <button id="startButton" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition duration-300 shadow-lg text-lg disabled:bg-gray-400">シミュレーションを開始</button>
-            </div>
-        </div>
+    <div id="loading-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div class="loader"></div></div>
 
-        <div id="screen-game" class="hidden w-full flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden" style="height: 75vh; max-height: 700px;">
-            <header class="bg-gray-800 text-white p-4 flex justify-between items-center shadow-md z-10">
-                <div class="flex items-center gap-4">
-                    <img id="headerLogo" src="" alt="Company Logo" class="h-8 hidden">
-                    <h2 id="phaseTitle" class="text-lg font-bold"></h2>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button id="hintButton" class="hidden bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg text-sm">ガイド</button>
-                    <button id="dashboardButton" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg text-sm">スコア確認</button>
-                </div>
-            </header>
-            <main id="chat-container" class="chat-container flex-1 p-6 overflow-y-auto space-y-6"></main>
+    <!-- ログイン画面 -->
+    <div id="login-screen" class="max-w-md mx-auto mt-10 p-8 bg-white rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold text-center mb-6">管理画面ログイン</h1>
+        
+        <div class="mb-4">
+            <label for="spreadsheet-id" class="block text-sm font-medium text-gray-700">スプレッドシートID</label>
+            <input type="text" id="spreadsheet-id" placeholder="操作したいスプレッドシートのID" class="w-full px-4 py-2 border rounded-lg mt-1">
         </div>
-
-        <div id="screen-dashboard" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"> <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md m-4"> <h2 class="text-2xl font-bold mb-4 text-gray-800">現在のスコア</h2> <div style="width: 100%; height: 300px;"> <canvas id="dashboardRadarChart"></canvas> </div> <div class="mt-6 text-center"> <button id="closeDashboardButton" class="bg-gray-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-700 transition duration-300">閉じる</button> </div> </div> </div>
-        <div id="screen-hint" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"> <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md m-4"> <h2 class="text-2xl font-bold mb-4 text-gray-800">ガイド</h2> <div id="hintText" class="text-gray-600 mb-6 whitespace-pre-wrap"></div> <div class="mt-6 text-center"> <button id="closeHintButton" class="bg-gray-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-700 transition duration-300">閉じる</button> </div> </div> </div>
-        <div id="screen-pre-result" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-end justify-center z-50 pb-20"> <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md m-4 text-center"> <p id="preResultMessage" class="text-2xl font-bold mb-8 text-gray-800"></p> <button id="showResultButton" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition duration-300 shadow-lg">結果を見る</button> </div> </div>
-        <div id="screen-result" class="hidden flex-col items-center justify-center h-full p-4"> <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-2xl text-center"> <h2 id="resultTitle" class="text-3xl font-bold text-gray-800 mb-4"></h2> <div id="resultMessage" class="text-gray-600 mb-6 text-left whitespace-pre-wrap"></div> <div class="my-6"> <canvas id="resultRadarChart"></canvas> </div> <div class="mt-8 flex flex-wrap justify-center gap-4"> <button id="certificateButton" class="bg-green-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-green-700 transition duration-300 shadow-lg">修了証を発行する</button> <button id="interviewButton" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition duration-300 shadow-lg">企業へ応募する</button> <button id="retryButton" class="bg-gray-500 text-white font-bold py-3 px-8 rounded-lg hover:bg-gray-600 transition duration-300 shadow-lg">もう一度挑戦する</button> </div> </div> </div>
+        <div class="mb-4">
+            <label for="username" class="block text-sm font-medium text-gray-700">ユーザー名</label>
+            <input type="text" id="username" placeholder="ユーザー名" class="w-full px-4 py-2 border rounded-lg mt-1">
+        </div>
+        <div class="mb-4">
+             <label for="password" class="block text-sm font-medium text-gray-700">パスワード</label>
+            <input type="password" id="password" placeholder="パスワード" class="w-full px-4 py-2 border rounded-lg mt-1">
+        </div>
+        <button id="login-button" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">ログイン</button>
+        <p id="login-error" class="text-red-500 text-sm mt-2"></p>
     </div>
 
-    <div id="screen-retry-confirm" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md m-4 text-center">
-            <p class="text-xl mb-6 text-gray-800">スタート画面へ戻ります。よろしいですか?</p>
-            <div class="flex justify-center gap-4">
-                 <button id="confirmRetryYes" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">はい</button>
-                 <button id="confirmRetryNo" class="bg-gray-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-600">いいえ</button>
+    <!-- 管理画面 -->
+    <div id="admin-panel" class="hidden">
+        <div id="admin-panel-container">
+            <div id="editor-pane" style="width: 50%;">
+                <div class="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4"> <h1 class="text-3xl font-bold">データ編集</h1> <div class="flex items-center gap-4"> <button id="toggle-credential-form" class="bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 text-sm">認証情報変更</button> <button id="logout-button" class="bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600">ログアウト</button> </div> </div> <div id="credential-form" class="hidden bg-white p-6 rounded-lg shadow-md mb-6"> <h2 class="text-xl font-bold mb-4">認証情報の変更</h2> <div class="space-y-4"> <input type="password" id="current-password" placeholder="現在のパスワード"> <input type="text" id="new-username" placeholder="新しいユーザー名"> <input type="password" id="new-password" placeholder="新しいパスワード"> <input type="password" id="confirm-password" placeholder="新しいパスワード（確認）"> </div> <button id="change-credentials-button" class="mt-4 bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700">変更を保存</button> <p id="credential-message" class="text-sm mt-2"></p> </div> <div id="sheet-tabs" class="mb-4 border-b"></div> <div class="table-container bg-white rounded-lg shadow"> <table id="data-table" class="w-full text-sm text-left text-gray-500"> <thead id="table-head"></thead> <tbody id="table-body"></tbody> </table> </div> <div id="action-buttons" class="mt-6 flex gap-4"> <button id="save-button" class="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700">変更を保存</button> <button id="preview-update-button" class="bg-purple-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-purple-700">プレビュー更新</button> <button id="add-row-button" class="hidden bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">レコードを追加</button> </div>
             </div>
-            <p class="mt-4 text-sm text-gray-500">戻らない場合はブラウザをリロード(F5)してください。</p>
+            
+            <div id="resizer"></div>
+            
+            <div id="preview-pane" class="flex-grow">
+                <div class="p-4 bg-gray-200 border-b">
+                    <h2 class="text-lg font-bold text-gray-700">プレビュー</h2>
+                </div>
+                <iframe id="preview-iframe" title="Job Simulation Preview"></iframe>
+            </div>
         </div>
     </div>
-    
-    <footer id="main-footer" class="w-full bg-gray-800 text-white text-center p-4">
-        <p>&copy; <span id="copyright-year"></span> <span id="footer-company-name"></span>. All Rights Reserved.</p>
-    </footer>
 
 <script>
-// ★★★★★【注意】★★★★★
-// このファイルはプレビュー専用です。本番では`jobsim_production.html`をご利用ください。
+// ★★★★★【重要：要設定】★★★★★
 const GAS_URL = 'https://script.google.com/macros/s/AKfycby5J6CR-pgF8imIIlmGagEnSaXLzrzmWpubR9gg_VcwILRvvnUhtJ0BVCTXhk5anvsL/exec';
-const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';
+const PREVIEW_URL = 'https://rightjob2025.github.io/jobsim-test';
 
-// --- Global Variables ---
-let gameData = {};
-let scores = {};
-let userName = '';
-let currentPhaseId = 'prologue';
-let finalEndContent = null;
-let lastDisplayedMessage = '';
+// DOM Elements
+const loginScreen = document.getElementById('login-screen');
+const adminPanel = document.getElementById('admin-panel');
+const spreadsheetIdInput = document.getElementById('spreadsheet-id');
+const usernameInput = document.getElementById('username');
+const passwordInput = document.getElementById('password');
+const loginButton = document.getElementById('login-button');
+const loginError = document.getElementById('login-error');
+const previewIframe = document.getElementById('preview-iframe');
+const previewUpdateButton = document.getElementById('preview-update-button');
+const credentialForm = document.getElementById('credential-form');
+const toggleCredentialButton = document.getElementById('toggle-credential-form');
+const changeCredentialsButton = document.getElementById('change-credentials-button');
+const credentialMessage = document.getElementById('credential-message');
+const logoutButton = document.getElementById('logout-button');
+const sheetTabs = document.getElementById('sheet-tabs');
+const tableHead = document.getElementById('table-head');
+const tableBody = document.getElementById('table-body');
+const saveButton = document.getElementById('save-button');
+const addRowButton = document.getElementById('add-row-button');
+const editorPane = document.getElementById('editor-pane');
+const resizer = document.getElementById('resizer');
 
-// --- DOM Elements ---
-const mainHeaderLogo = document.getElementById('main-header-logo');
-const mainHeaderCompanyName = document.getElementById('main-header-company-name');
-const footerCompanyName = document.getElementById('footer-company-name');
-const copyrightYearEl = document.getElementById('copyright-year');
-const screens = { top: document.getElementById('screen-top'), game: document.getElementById('screen-game'), dashboard: document.getElementById('screen-dashboard'), hint: document.getElementById('screen-hint'), preResult: document.getElementById('screen-pre-result'), result: document.getElementById('screen-result'), retryConfirm: document.getElementById('screen-retry-confirm') };
-const gameTitleEl = document.getElementById('gameTitle');
-const userNameInput = document.getElementById('userName');
-const startButton = document.getElementById('startButton');
-const chatContainer = document.getElementById('chat-container');
-const phaseTitleEl = document.getElementById('phaseTitle');
-const dashboardButton = document.getElementById('dashboardButton');
-const closeDashboardButton = document.getElementById('closeDashboardButton');
-const hintButton = document.getElementById('hintButton');
-const closeHintButton = document.getElementById('closeHintButton');
-const hintTextEl = document.getElementById('hintText');
-const preResultMessageEl = document.getElementById('preResultMessage');
-const showResultButton = document.getElementById('showResultButton');
-const resultTitleEl = document.getElementById('resultTitle');
-const resultMessageEl = document.getElementById('resultMessage');
-const certificateButton = document.getElementById('certificateButton');
-const interviewButton = document.getElementById('interviewButton');
-const retryButton = document.getElementById('retryButton');
-const confirmRetryYes = document.getElementById('confirmRetryYes');
-const confirmRetryNo = document.getElementById('confirmRetryNo');
+let allSheetData = {};
+let currentSheet = '';
+const sheetNames = ['設定', 'コンテンツデータ', 'スコア定義', '判定ロジック', 'ヒント', '話者設定'];
 
 
-// ★★★★★【プレビュー機能】★★★★★
-window.addEventListener('message', receivePreviewData);
-function receivePreviewData(event) {
-    if (event.data && event.data.type === 'JOB_SIM_PREVIEW_DATA') {
-        console.log('プレビューデータを受信しました:', event.data.payload);
-        initializeGame(event.data.payload);
-    }
-}
-
-// --- Initialization ---
+// --- Initialization & Event Listeners ---
 document.addEventListener('DOMContentLoaded', () => {
-    setupEventListeners();
-    if (window.self === window.top) {
-        fetchAndInitialize();
-    } else {
-        console.log("プレビューモードで待機中...");
+    loginButton.addEventListener('click', handleLogin);
+    previewUpdateButton.addEventListener('click', handlePreviewUpdate);
+    logoutButton.addEventListener('click', handleLogout);
+    toggleCredentialButton.addEventListener('click', () => credentialForm.classList.toggle('hidden'));
+    changeCredentialsButton.addEventListener('click', handleChangeCredentials);
+    saveButton.addEventListener('click', handleSave);
+    addRowButton.addEventListener('click', handleAddRow);
+
+    let isResizing = false;
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        previewIframe.style.pointerEvents = 'none';
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', stopResizing);
+    });
+    
+    function stopResizing() {
+        if (isResizing) {
+            isResizing = false;
+            previewIframe.style.pointerEvents = 'auto';
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', stopResizing);
+        }
     }
+
+    function handleMouseMove(e) {
+        if (!isResizing) return;
+        const totalWidth = document.getElementById('admin-panel-container').offsetWidth;
+        let newEditorWidth = e.clientX;
+        if (newEditorWidth < 300) newEditorWidth = 300;
+        if (totalWidth - newEditorWidth - resizer.offsetWidth < 300) {
+            newEditorWidth = totalWidth - resizer.offsetWidth - 300;
+        }
+        editorPane.style.width = `${newEditorWidth}px`;
+    }
+
+    spreadsheetIdInput.value = localStorage.getItem('jobsim_spreadsheet_id') || '';
+    checkLogin();
 });
 
-async function fetchAndInitialize() {
-    userNameInput.value = localStorage.getItem('jobsim_userName') || '';
-    if(copyrightYearEl) {
-        copyrightYearEl.textContent = new Date().getFullYear();
-    }
-    startButton.disabled = true;
-    startButton.textContent = 'データを読み込み中...';
-    if (SPREADSHEET_ID === 'YOUR_SPREADSHEET_ID_HERE') {
-        alert('エラー: スプレッドシートIDが設定されていません。HTMLファイルを編集してください。');
-        startButton.textContent = '設定エラー';
+
+// --- Authentication ---
+function handleLogin() {
+    const spreadsheetId = spreadsheetIdInput.value.trim();
+    const username = usernameInput.value;
+    const password = passwordInput.value;
+
+    if (!spreadsheetId) {
+        loginError.textContent = 'スプレッドシートIDを入力してください。';
         return;
     }
-    try {
-        const urlWithParams = `${GAS_URL}?spreadsheetId=${SPREADSHEET_ID}&v=${new Date().getTime()}`;
-        const data = await fetchJSONP(urlWithParams);
-        initializeGame(data);
-    } catch (error) {
-        console.error('ゲームデータの読み込みに失敗しました:', error);
-        alert('ゲームデータの読み込みに失敗しました。\n' + error.message);
-        startButton.textContent = '読み込みエラー';
-    }
-}
-
-function initializeGame(data) {
-    if (data.error) {
-        alert(`データエラー: ${data.error}`);
+    if (!username || !password) {
+        loginError.textContent = 'ユーザー名とパスワードを入力してください。';
         return;
     }
-    gameData = data;
-    resetGame();
-    if (!gameData.contents || gameData.contents.length === 0) {
-        alert('コンテンツデータが見つかりません。');
-        return;
-    }
-    gameTitleEl.textContent = gameData.settings.gameTitle || 'ジョブシミュレーション';
-    
-    if (gameData.settings.companyName) {
-        mainHeaderCompanyName.textContent = gameData.settings.companyName;
-        footerCompanyName.textContent = gameData.settings.companyName;
-    }
+    loginError.textContent = '';
 
-    if (gameData.settings.companyLogoUrl) {
-        const topLogo = document.getElementById('topLogo');
-        const headerLogo = document.getElementById('headerLogo');
-        const loadImage = (imgElement, type) => {
-            if (!imgElement) return;
-            imgElement.onerror = () => { console.error(`${type}ロゴの読み込み失敗`); imgElement.classList.add('hidden'); };
-            imgElement.onload = () => { imgElement.classList.remove('hidden'); };
-            imgElement.src = gameData.settings.companyLogoUrl;
-        };
-        loadImage(topLogo, 'トップ');
-        loadImage(headerLogo, 'ゲームヘッダー');
-        loadImage(mainHeaderLogo, 'メインヘッダー');
-    }
+    localStorage.setItem('jobsim_spreadsheet_id', spreadsheetId);
 
-    scores = {};
-    if(gameData.scoreDefinitions) {
-        Object.keys(gameData.scoreDefinitions).forEach(key => {
-            scores[key] = 0;
+    callGas('login', { username, password })
+        .then(result => {
+            if (result.success) {
+                sessionStorage.setItem('jobsim_admin_token', result.token);
+                loginScreen.classList.add('hidden');
+                adminPanel.classList.remove('hidden');
+                initializeAdminPanel();
+            } else {
+                loginError.textContent = result.message || 'ログインに失敗しました。';
+            }
         });
+}
+
+function checkLogin() {
+    if (sessionStorage.getItem('jobsim_admin_token')) {
+        loginScreen.classList.add('hidden');
+        adminPanel.classList.remove('hidden');
+        initializeAdminPanel();
     }
-    startButton.textContent = 'シミュレーションを開始';
-    validateUserName();
 }
 
-function setupEventListeners() {
-    if (window.listenersAttached) return;
-    startButton.addEventListener('click', startGame);
-    userNameInput.addEventListener('input', validateUserName);
-    dashboardButton.addEventListener('click', showDashboard);
-    closeDashboardButton.addEventListener('click', hideDashboard);
-    hintButton.addEventListener('click', showHint);
-    closeHintButton.addEventListener('click', hideHint);
-    showResultButton.addEventListener('click', displayFinalResult);
-    certificateButton.addEventListener('click', generateCertificate);
-    interviewButton.addEventListener('click', openInterviewLink);
-    retryButton.addEventListener('click', showRetryConfirmModal);
-    confirmRetryYes.addEventListener('click', handleConfirmRetry);
-    confirmRetryNo.addEventListener('click', hideRetryConfirmModal);
-    window.listenersAttached = true;
+function handleLogout() {
+    sessionStorage.removeItem('jobsim_admin_token');
+    adminPanel.classList.add('hidden');
+    loginScreen.classList.remove('hidden');
+    passwordInput.value = '';
+    usernameInput.value = '';
 }
 
-function validateUserName() { startButton.disabled = !userNameInput.value.trim() || !gameData.settings; }
-function showScreen(screenName) { Object.values(screens).forEach(screen => screen.classList.add('hidden')); screens[screenName].classList.remove('hidden'); if (['top', 'game', 'result'].includes(screenName)) { screens[screenName].classList.add('flex'); } }
-function startGame() { userName = userNameInput.value.trim(); localStorage.setItem('jobsim_userName', userName); showScreen('game'); renderPhase(currentPhaseId); }
-function resetGame() { currentPhaseId = 'prologue'; scores = {}; chatContainer.innerHTML = ''; showScreen('top'); }
-async function renderPhase(phaseId) { const phase = gameData.contents.find(p => p.phaseId?.trim() === phaseId?.trim()); if (!phase) { const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === phaseId); if(endContent) { showResult(endContent); } else { alert(`次のコンテンツが見つかりません。(ID: ${phaseId})`); } return; } currentPhaseId = phaseId; phaseTitleEl.textContent = phase.phaseTitle || ''; await displayMessages(phase.phaseDescription); if (phase.taskContent) await displayMedia(phase.taskContent); chatContainer.scrollTop = chatContainer.scrollHeight; const isQuestionPage = phase.taskName?.trim() && phase.choice1_text?.trim(); hintButton.classList.toggle('hidden', !(isQuestionPage && gameData.hints?.[phaseId.trim()])); if (isQuestionPage) { await displayMessage(phase.taskName, 'system'); let choices = []; for (let i = 1; i <= 3; i++) { if (phase[`choice${i}_text`]?.trim()) { choices.push({ text: phase[`choice${i}_text`], score: JSON.parse(phase[`choice${i}_score`] || '{}'), nextPhaseId: phase[`choice${i}_nextPhaseId`], message: phase[`choice${i}_message`] }); } } choices = shuffle(choices); createChoiceButtons(choices); } else { const nextPhaseId = phase.choice1_nextPhaseId; if (nextPhaseId?.trim()) { const delay = Number(gameData.settings.sleepNext) || 1500; await sleep(delay); renderPhase(nextPhaseId.trim()); } else { showResult(calculateEnd()); } } }
-async function handleChoice(choice) { document.getElementById('button-wrapper')?.remove(); await displayMessage(choice.text, 'character', userName || 'あなた'); Object.keys(choice.score).forEach(key => { scores[key] = (scores[key] || 0) + Number(choice.score[key] || 0); }); if (choice.message) await displayMessages(choice.message); const delay = Number(gameData.settings.sleepChoice) || 1000; await sleep(delay); const nextPhase = choice.nextPhaseId?.trim(); if (nextPhase?.startsWith('end')) { const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === nextPhase); showResult(endContent || calculateEnd()); } else if (nextPhase) { renderPhase(nextPhase); } else { showResult(calculateEnd()); } }
-function calculateEnd() { if (!gameData.logics?.length) return gameData.contents.find(c => c.dataType === 'end'); const sortedLogics = [...gameData.logics].sort((a, b) => a.priority - b.priority); for (const logic of sortedLogics) { try { if (!logic.condition) continue; const condition = String(logic.condition).replace(/([a-zA-Z_]\w*)/g, match => `(scores['${match}'] || 0)`); if (eval(condition)) { return gameData.contents.find(c => c.dataType === 'end' && c.endId === logic.endId); } } catch (e) { console.error(`Error in condition for endId ${logic.endId}:`, e); } } return gameData.contents.find(c => c.dataType === 'end'); }
-async function displayMessages(description) { if (!description?.trim()) return; const formattedDescription = description.replace(/{{userName}}/g, userName || 'あなた'); if (formattedDescription === lastDisplayedMessage) return; lastDisplayedMessage = formattedDescription; const messages = formattedDescription.split(/<br\s*\/?>/g).filter(m => m.trim()); for (const msg of messages) { const match = msg.trim().match(/^\[(.*?)\](.*)/); await displayMessage(match ? match[2].trim() : msg.trim(), match ? 'character' : 'system', match ? match[1] : ''); const delay = Number(gameData.settings.sleepMessage) || 800; await sleep(delay); } }
-function displayMessage(text, type = 'system', speaker = '') { return new Promise(resolve => { const messageWrapper = document.createElement('div'); const iconUrl = gameData.speakers?.[speaker]; if (type === 'character') { const isUser = speaker === (userName || 'あなた'); const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="${speaker}" class="w-10 h-10 rounded-full object-cover">` : `<div class="w-10 h-10 rounded-full flex items-center justify-center font-bold bg-gray-200">${speaker.charAt(0)}</div>`; messageWrapper.className = `message flex items-start gap-3 ${isUser ? 'justify-end' : ''}`; const messageContent = `<div class="flex flex-col ${isUser ? 'items-end' : 'items-start'}"><p class="font-bold">${speaker}</p><div class="mt-1 text-white ${isUser ? 'bg-blue-500' : 'bg-gray-500'} rounded-lg p-3">${text}</div></div>`; messageWrapper.innerHTML = isUser ? messageContent + iconHtml : iconHtml + messageContent; } else { messageWrapper.className = 'message w-full'; messageWrapper.innerHTML = `<div class="text-gray-800 bg-gray-200 border-l-4 border-gray-400 p-3">${text}</div>`; } chatContainer.appendChild(messageWrapper); chatContainer.scrollTop = chatContainer.scrollHeight; setTimeout(resolve, 300); }); }
-function convertToEmbedUrl(url) { if (!url || typeof url !== 'string') return ''; const youtubeMatch = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/); if (youtubeMatch) return `https://www.youtube.com/embed/${youtubeMatch[1]}`; const driveMatch = url.match(/drive\.google\.com\/(?:file\/d\/|presentation\/d\/)([a-zA-Z0-9_-]+)/); if (driveMatch) { const fileId = driveMatch[1]; if (url.includes('/presentation/d/')) { return `https://docs.google.com/presentation/d/${fileId}/embed?start=false&loop=false&delayms=3000`; } return `https://drive.google.com/file/d/${fileId}/preview`; } return url; }
-function displayMedia(url) { return new Promise(resolve => { if (!url?.trim()) return resolve(); const mediaWrapper = document.createElement('div'); mediaWrapper.className = 'message w-full flex justify-center my-4'; const isImageUrl = /\.(jpeg|jpg|gif|png|webp|svg)$/i.test(url); if (isImageUrl) { mediaWrapper.innerHTML = `<img src="${url}" class="chat-image max-w-full md:max-w-md rounded-lg shadow-md cursor-pointer" alt="コンテンツ画像">`; } else { const embedUrl = convertToEmbedUrl(url); mediaWrapper.innerHTML = `<div class="w-full aspect-video"> <iframe class="w-full h-full rounded-lg shadow-md" src="${embedUrl}" frameborder="0" allowfullscreen></iframe> </div>`; } chatContainer.appendChild(mediaWrapper); chatContainer.scrollTop = chatContainer.scrollHeight; setTimeout(resolve, 300); }); }
-function createChoiceButtons(choices) {
-    const buttonContainer = document.createElement('div');
-    buttonContainer.id = 'button-wrapper';
-    buttonContainer.className = 'message grid grid-cols-1 gap-3 py-4';
-    choices.forEach(choice => {
-        const button = document.createElement('button');
-        button.className = 'choice-button w-full bg-white text-blue-600 font-semibold py-3 px-4 border-2 border-blue-500 rounded-lg hover:bg-blue-50';
-        button.textContent = choice.text;
-        button.onclick = () => handleChoice(choice);
-        buttonContainer.appendChild(button);
+function handleChangeCredentials() {
+    const currentPassword = document.getElementById('current-password').value;
+    const newUsername = document.getElementById('new-username').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    credentialMessage.textContent = '';
+    if (!currentPassword || !newUsername || !newPassword) {
+        credentialMessage.textContent = 'すべての必須項目を入力してください。';
+        credentialMessage.className = 'text-red-500 text-sm mt-2';
+        return;
+    }
+    if (newPassword !== confirmPassword) {
+        credentialMessage.textContent = '新しいパスワードが一致しません。';
+        credentialMessage.className = 'text-red-500 text-sm mt-2';
+        return;
+    }
+    callGas('changeCredentials', { currentPassword, newUsername, newPassword })
+        .then(result => {
+            if (result.success) {
+                credentialMessage.textContent = '認証情報を更新しました。';
+                credentialMessage.className = 'text-green-600 text-sm mt-2';
+                ['current-password', 'new-username', 'new-password', 'confirm-password'].forEach(id => document.getElementById(id).value = '');
+            } else {
+                credentialMessage.textContent = result.message || '更新に失敗しました。';
+                credentialMessage.className = 'text-red-500 text-sm mt-2';
+            }
+        });
+}
+
+// --- Main Admin Panel Functions ---
+async function initializeAdminPanel() {
+    sheetTabs.innerHTML = '';
+    sheetNames.forEach(name => {
+        const tab = document.createElement('button');
+        tab.textContent = name;
+        tab.dataset.sheetName = name;
+        tab.className = 'px-4 py-2 -mb-px font-semibold text-gray-800 border-b-2 border-transparent hover:border-blue-500';
+        tab.onclick = () => switchSheet(name);
+        sheetTabs.appendChild(tab);
     });
-    chatContainer.appendChild(buttonContainer);
-    setTimeout(() => {
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-    }, 100);
-}
-function showRetryConfirmModal() { screens.retryConfirm.classList.remove('hidden'); }
-function hideRetryConfirmModal() { screens.retryConfirm.classList.add('hidden'); }
-function handleConfirmRetry() {
-    hideRetryConfirmModal();
-    resetGame();
-}
-function showDashboard() { screens.dashboard.classList.remove('hidden'); renderRadarChart('dashboardRadarChart', scores); }
-function hideDashboard() { screens.dashboard.classList.add('hidden'); }
-function showHint() { const hint = gameData.hints[currentPhaseId.trim()]; if (hint) { hintTextEl.textContent = hint; screens.hint.classList.remove('hidden'); } }
-function hideHint() { screens.hint.classList.add('hidden'); }
-function showResult(endContent) { finalEndContent = endContent; preResultMessageEl.textContent = `${userName}さん、お疲れ様でした！結果を見てみましょう。`; screens.preResult.classList.remove('hidden'); }
-function displayFinalResult() { screens.preResult.classList.add('hidden'); showScreen('result'); resultTitleEl.textContent = finalEndContent.endTitle || 'シミュレーション終了'; resultMessageEl.textContent = (finalEndContent.endMessage || '').replace(/{{userName}}/g, userName || 'あなた'); renderRadarChart('resultRadarChart', scores); }
-function openInterviewLink() { if (gameData.settings?.interviewUrl) { window.open(gameData.settings.interviewUrl, '_blank'); } else { alert('URLが設定されていません。'); } }
-async function generateCertificate() { alert('修了証は現在開発中です。'); }
-function fetchJSONP(url) { return new Promise((resolve, reject) => { const cb = 'j' + Math.random().toString(36).substr(2); window[cb] = d => { delete window[cb]; document.body.removeChild(s); resolve(d); }; const s = document.createElement('script'); s.src = `${url}&callback=${cb}`; s.onerror = () => reject(new Error('GAS script fetch failed.')); document.body.appendChild(s); }); }
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-function shuffle(array) {
-    let currentIndex = array.length,  randomIndex;
-    while (currentIndex > 0) {
-        randomIndex = Math.floor(Math.random() * currentIndex);
-        currentIndex--;
-        [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+    
+    allSheetData = await callGas('getAllSheetData', {});
+    if (!allSheetData || Object.keys(allSheetData).length === 0) {
+        alert('シートデータの読み込みに失敗しました。');
+        return;
     }
-    return array;
+    
+    await switchSheet(sheetNames[0]);
+    
+    previewIframe.src = PREVIEW_URL;
 }
-function renderRadarChart(canvasId, data) { const ctx = document.getElementById(canvasId)?.getContext('2d'); if (!ctx) return; const labels = Object.values(gameData.scoreDefinitions || {}); const values = Object.keys(gameData.scoreDefinitions || {}).map(key => data[key] || 0); if (Chart.getChart(canvasId)) Chart.getChart(canvasId).destroy(); new Chart(ctx, { type: 'radar', data: { labels: labels, datasets: [{ label: 'スコア', data: values, fill: true, backgroundColor: 'rgba(54, 162, 235, 0.2)', borderColor: 'rgb(54, 162, 235)' }] }, options: { maintainAspectRatio: false } }); }
 
+async function switchSheet(sheetName) {
+    currentSheet = sheetName;
+    document.querySelectorAll('#sheet-tabs button').forEach(tab => {
+        tab.classList.toggle('border-blue-500', tab.dataset.sheetName === sheetName);
+        tab.classList.toggle('text-blue-600', tab.dataset.sheetName === sheetName);
+    });
+    addRowButton.classList.toggle('hidden', sheetName !== 'コンテンツデータ');
+    const data = allSheetData[currentSheet];
+    renderTable(data);
+}
+
+function renderTable(dataObject) {
+    const headers = dataObject.headers || [];
+    const rows = dataObject.rows || [];
+
+    if (headers.length === 0) {
+        tableHead.innerHTML = '<tr><th>シートが見つからないか、ヘッダーがありません</th></tr>';
+        tableBody.innerHTML = '';
+        return;
+    }
+
+    tableHead.innerHTML = `<tr>${headers.map(h => `<th class="px-4 py-2">${h}</th>`).join('')}<th>削除</th></tr>`;
+
+    if (rows.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="' + (headers.length + 1) + '" class="text-center p-4">データがありません。</td></tr>';
+        return;
+    }
+
+    tableBody.innerHTML = '';
+    rows.forEach((row, rowIndex) => {
+        const tr = document.createElement('tr');
+        tr.className = "bg-white border-b";
+        headers.forEach(header => {
+            const td = document.createElement('td');
+            td.style.minWidth = header === 'phaseDescription' ? '400px' : '200px';
+            const textarea = document.createElement('textarea');
+            textarea.value = row[header] || '';
+            textarea.dataset.rowIndex = rowIndex;
+            textarea.dataset.header = header;
+            td.appendChild(textarea);
+            tr.appendChild(td);
+        });
+        const deleteTd = document.createElement('td');
+        if (currentSheet === 'コンテンツデータ' && row['dataType'] === 'phase') {
+            const deleteButton = document.createElement('button');
+            deleteButton.textContent = '削除';
+            deleteButton.className = 'bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600';
+            deleteButton.onclick = () => handleDeleteRow(rowIndex);
+            deleteTd.appendChild(deleteButton);
+        }
+        tr.appendChild(deleteTd);
+        tableBody.appendChild(tr);
+    });
+}
+
+function handleSave() {
+    updateLocalDataFromTable();
+    const dataToSave = allSheetData[currentSheet].rows;
+    if (confirm('この変更を保存しますか？')) {
+        callGas('updateSheet', { sheetName: currentSheet, data: dataToSave })
+            .then(result => {
+                if (result.success) {
+                    alert('保存しました。');
+                } else {
+                    alert('保存に失敗しました。\n' + result.message);
+                }
+            });
+    }
+}
+
+// ★★★★★【修正済み】★★★★★
+function handleAddRow() {
+    if (currentSheet !== 'コンテンツデータ') return;
+    const headers = allSheetData[currentSheet].headers;
+
+    if (!headers || headers.length === 0) {
+        alert('シートの列情報を取得できません。先にスプレッドシート側でヘッダー（1行目）を入力してください。');
+        return;
+    }
+
+    const newRecord = headers.reduce((acc, header) => {
+        acc[header] = '';
+        return acc;
+    }, {});
+    
+    // ご要望に基づき、dataType列に'***'を設定して空行を防ぐ
+    if (headers.includes('dataType')) {
+        newRecord['dataType'] = '***';
+    } else {
+        // dataType列がない場合のフォールバックとして、最初の列に印をつける
+        newRecord[headers[0]] = ' '; 
+    }
+
+    if (confirm('新しい空のレコードを末尾に追加しますか？')) {
+        callGas('addRow', { sheetName: 'コンテンツデータ', record: newRecord })
+            .then(result => {
+                if (result.success) {
+                    alert('レコードを追加しました。画面を更新します。');
+                    initializeAdminPanel(); 
+                } else {
+                    alert('追加に失敗しました。\n' + result.message);
+                }
+            });
+    }
+}
+
+function handleDeleteRow(rowIndex) {
+    if (currentSheet !== 'コンテンツデータ') return;
+    const rowNumber = rowIndex + 2; 
+    if (confirm(`${rowIndex + 1}行目のレコードを削除しますか？この操作は元に戻せません。`)) {
+        callGas('deleteRow', { sheetName: 'コンテンツデータ', rowNumber: rowNumber })
+            .then(result => {
+                if (result.success) {
+                    alert('削除しました。');
+                    initializeAdminPanel();
+                } else {
+                    alert('削除に失敗しました。\n' + result.message);
+                }
+            });
+    }
+}
+
+async function handlePreviewUpdate() {
+    const iframe = previewIframe;
+    if (!iframe.src) {
+        alert('プレビューが読み込まれていません。');
+        return;
+    }
+    updateLocalDataFromTable();
+    const gameData = {
+        settings: allSheetData['設定'].rows.length > 0 ? allSheetData['設定'].rows[0] : {},
+        contents: allSheetData['コンテンツデータ'].rows || [],
+        scoreDefinitions: (allSheetData['スコア定義'].rows || []).reduce((obj, item) => {
+            if (item.key) obj[item.key] = item.name;
+            return obj;
+        }, {}),
+        logics: allSheetData['判定ロジック'].rows || [],
+        hints: (allSheetData['ヒント'].rows || []).reduce((obj, item) => {
+            if (item.phaseId) obj[item.phaseId] = item.hintText;
+            return obj;
+        }, {}),
+        speakers: (allSheetData['話者設定'].rows || []).reduce((obj, item) => {
+            if (item.speakerName) obj[item.speakerName] = item.iconUrl;
+            return obj;
+        }, {}),
+    };
+    iframe.contentWindow.postMessage({ type: 'JOB_SIM_PREVIEW_DATA', payload: gameData }, '*');
+}
+
+function updateLocalDataFromTable() {
+    const rows = tableBody.rows;
+    if (rows.length === 0 || (rows.length === 1 && rows[0].cells.length <= 1)) {
+        allSheetData[currentSheet].rows = [];
+        return;
+    }
+    const headers = allSheetData[currentSheet].headers;
+    const updatedData = Array.from(rows).map(row => {
+        const rowObject = {};
+        headers.forEach((header, i) => {
+            const cell = row.cells[i];
+            const textarea = cell ? cell.querySelector('textarea') : null;
+            if (textarea) {
+                rowObject[header] = textarea.value;
+            }
+        });
+        return rowObject;
+    });
+    allSheetData[currentSheet].rows = updatedData;
+}
+
+
+// --- GAS Communication ---
+async function callGas(action, payload = {}) {
+    document.getElementById('loading-overlay').classList.remove('hidden');
+
+    const spreadsheetId = localStorage.getItem('jobsim_spreadsheet_id');
+    if (!GAS_URL || GAS_URL === 'YOUR_GAS_URL_HERE') {
+        loginError.textContent = 'GAS URLが設定されていません。HTMLファイルを編集してください。';
+        document.getElementById('loading-overlay').classList.add('hidden');
+        return { success: false, message: 'GAS URL not configured' };
+    }
+
+    try {
+        const token = sessionStorage.getItem('jobsim_admin_token');
+        const res = await fetch(GAS_URL, {
+            method: 'POST',
+            mode: 'cors',
+            credentials: 'omit',
+            body: JSON.stringify({ action, token, spreadsheetId, ...payload }),
+            redirect: 'follow'
+        });
+
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return await res.json();
+    } catch (e) {
+        console.error('GAS call failed:', e);
+        loginError.textContent = 'GASへの通信に失敗しました。URLが正しいか、CORS設定がされているか確認してください。';
+        alert('エラーが発生しました。コンソールを確認してください。');
+        return { success: false, message: e.message };
+    } finally {
+        document.getElementById('loading-overlay').classList.add('hidden');
+    }
+}
 </script>
 </body>
 </html>
