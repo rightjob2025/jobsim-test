@@ -8,7 +8,8 @@
     <style>
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .table-container { max-height: calc(100vh - 300px); overflow-y: auto; }
+        /* テーブルコンテナの高さ */
+        .table-container { max-height: calc(100vh - 250px); overflow-y: auto; }
         td, th { padding: 8px; border: 1px solid #ddd; min-width: 150px; vertical-align: top; }
         textarea, input[type="text"], input[type="password"] { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         
@@ -18,6 +19,13 @@
         #resizer:hover { background-color: #9ca3af; }
         #preview-pane { display: flex; flex-direction: column; }
         #preview-iframe { flex-grow: 1; border: none; }
+        .readonly-cell { background-color: #f9f9f9; color: #333; padding: 8px; font-size: 0.875rem; white-space: pre-wrap; word-break: break-all; }
+        
+        .summary-row { cursor: pointer; }
+        .summary-row:hover { background-color: #f9f9f9; }
+        .summary-details { display: none; }
+        .summary-details.open { display: table-row; }
+        .summary-details td { padding: 16px; background-color: #fafafa; }
     </style>
 </head>
 <body class="bg-gray-100 overflow-hidden">
@@ -48,7 +56,38 @@
     <div id="admin-panel" class="hidden">
         <div id="admin-panel-container">
             <div id="editor-pane" style="width: 50%;">
-                <div class="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4"> <h1 class="text-3xl font-bold">データ編集</h1> <div class="flex items-center gap-4"> <a href="https://drive.google.com/file/d/1gNUFDRRuFbwyP2tDlTdeeNrb49N8d1f6/view?usp=drive_link" target="_blank" rel="noopener noreferrer" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 text-sm">ヘルプ</a><button id="toggle-credential-form" class="bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 text-sm hidden">認証情報変更</button> <button id="logout-button" class="bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600">ログアウト</button> </div> </div> <div id="credential-form" class="hidden bg-white p-6 rounded-lg shadow-md mb-6"> <h2 class="text-xl font-bold mb-4">認証情報の変更</h2> <div class="space-y-4"> <input type="password" id="current-password" placeholder="現在のパスワード"> <input type="text" id="new-username" placeholder="新しいユーザー名"> <input type="password" id="new-password" placeholder="新しいパスワード"> <input type="password" id="confirm-password" placeholder="新しいパスワード（確認）"> </div> <button id="change-credentials-button" class="mt-4 bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700">変更を保存</button> <p id="credential-message" class="text-sm mt-2"></p> </div> <div id="sheet-tabs" class="mb-4 border-b"></div> <div class="table-container bg-white rounded-lg shadow"> <table id="data-table" class="w-full text-sm text-left text-gray-500"> <thead id="table-head"></thead> <tbody id="table-body"></tbody> </table> </div> <div id="action-buttons" class="mt-6 flex gap-4"> <button id="save-button" class="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700">変更を保存</button> <button id="preview-update-button" class="bg-purple-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-purple-700">プレビュー更新</button> <button id="add-row-button" class="hidden bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">レコードを追加</button> </div>
+                <div class="flex flex-col md:flex-row justify-between md:items-center mb-6 gap-4">
+                    <h1 class="text-3xl font-bold">データ編集</h1>
+                    <div class="flex items-center gap-4">
+                        <button id="toggle-credential-form" class="bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 text-sm hidden">認証情報変更</button>
+                        <button id="logout-button" class="bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600">ログアウト</button>
+                    </div>
+                </div>
+                <div id="credential-form" class="hidden bg-white p-6 rounded-lg shadow-md mb-6">
+                    <h2 class="text-xl font-bold mb-4">認証情報の変更</h2>
+                    <div class="space-y-4">
+                        <input type="password" id="current-password" placeholder="現在のパスワード">
+                        <input type="text" id="new-username" placeholder="新しいユーザー名">
+                        <input type="password" id="new-password" placeholder="新しいパスワード">
+                        <input type="password" id="confirm-password" placeholder="新しいパスワード（確認）">
+                    </div>
+                    <button id="change-credentials-button" class="mt-4 bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700">変更を保存</button>
+                    <p id="credential-message" class="text-sm mt-2"></p>
+                </div>
+                <div id="sheet-tabs" class="mb-4 border-b"></div>
+                
+                <!-- ★★★★★【修正】テーブルとボタンを正しい位置に戻しました ★★★★★ -->
+                <div class="table-container bg-white rounded-lg shadow">
+                    <table id="data-table" class="w-full text-sm text-left text-gray-500">
+                        <thead id="table-head"></thead>
+                        <tbody id="table-body"></tbody>
+                    </table>
+                </div>
+                <div id="action-buttons" class="mt-6 flex gap-4">
+                    <button id="save-button" class="bg-green-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-700">変更を保存</button>
+                    <button id="preview-update-button" class="bg-purple-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-purple-700">プレビュー更新</button>
+                    <button id="add-row-button" class="hidden bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">レコードを追加</button>
+                </div>
             </div>
             
             <div id="resizer"></div>
@@ -64,7 +103,7 @@
 
 <script>
 // ★★★★★【重要：要設定】★★★★★
-const GAS_URL = 'https://script.google.com/macros/s/AKfycby5J6CR-pgF8imIIlmGagEnSaXLzrzmWpubR9gg_VcwILRvvnUhtJ0BVCTXhk5anvsL/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxzkrTi4wqj75kf9FzWI0wuYmoEvVtlJEUS2iT2B-Nn_hnSsbQQR4tQ133lYwLpFTOq/exec';
 const PREVIEW_URL = 'https://rightjob2025.github.io/jobsim-test';
 
 // DOM Elements
@@ -88,11 +127,12 @@ const tableBody = document.getElementById('table-body');
 const saveButton = document.getElementById('save-button');
 const addRowButton = document.getElementById('add-row-button');
 const editorPane = document.getElementById('editor-pane');
+const previewPane = document.getElementById('preview-pane');
 const resizer = document.getElementById('resizer');
 
 let allSheetData = {};
 let currentSheet = '';
-const sheetNames = ['設定', 'コンテンツデータ', 'スコア定義', '判定ロジック', 'ヒント', '話者設定'];
+const sheetNames = ['設定', 'コンテンツデータ', 'スコア定義', '判定ロジック', 'ヒント', '話者設定', 'ログ', 'ログ集計'];
 
 
 // --- Initialization & Event Listeners ---
@@ -100,8 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loginButton.addEventListener('click', handleLogin);
     previewUpdateButton.addEventListener('click', handlePreviewUpdate);
     logoutButton.addEventListener('click', handleLogout);
-    toggleCredentialButton.addEventListener('click', () => credentialForm.classList.toggle('hidden'));
-    changeCredentialsButton.addEventListener('click', handleChangeCredentials);
+    // 認証機能はコメントアウト
+    // toggleCredentialButton.addEventListener('click', () => credentialForm.classList.toggle('hidden'));
+    // changeCredentialsButton.addEventListener('click', handleChangeCredentials);
     saveButton.addEventListener('click', handleSave);
     addRowButton.addEventListener('click', handleAddRow);
 
@@ -143,19 +184,10 @@ function handleLogin() {
     const spreadsheetId = spreadsheetIdInput.value.trim();
     const username = usernameInput.value;
     const password = passwordInput.value;
-
-    if (!spreadsheetId) {
-        loginError.textContent = 'スプレッドシートIDを入力してください。';
-        return;
-    }
-    if (!username || !password) {
-        loginError.textContent = 'ユーザー名とパスワードを入力してください。';
-        return;
-    }
+    if (!spreadsheetId) { loginError.textContent = 'スプレッドシートIDを入力してください。'; return; }
+    if (!username || !password) { loginError.textContent = 'ユーザー名とパスワードを入力してください。'; return; }
     loginError.textContent = '';
-
     localStorage.setItem('jobsim_spreadsheet_id', spreadsheetId);
-
     callGas('login', { username, password })
         .then(result => {
             if (result.success) {
@@ -168,39 +200,18 @@ function handleLogin() {
             }
         });
 }
+function checkLogin() { if (sessionStorage.getItem('jobsim_admin_token')) { loginScreen.classList.add('hidden'); adminPanel.classList.remove('hidden'); initializeAdminPanel(); } }
+function handleLogout() { sessionStorage.removeItem('jobsim_admin_token'); adminPanel.classList.add('hidden'); loginScreen.classList.remove('hidden'); passwordInput.value = ''; usernameInput.value = ''; }
 
-function checkLogin() {
-    if (sessionStorage.getItem('jobsim_admin_token')) {
-        loginScreen.classList.add('hidden');
-        adminPanel.classList.remove('hidden');
-        initializeAdminPanel();
-    }
-}
-
-function handleLogout() {
-    sessionStorage.removeItem('jobsim_admin_token');
-    adminPanel.classList.add('hidden');
-    loginScreen.classList.remove('hidden');
-    passwordInput.value = '';
-    usernameInput.value = '';
-}
-
+/* 認証変更機能は無効化
 function handleChangeCredentials() {
     const currentPassword = document.getElementById('current-password').value;
     const newUsername = document.getElementById('new-username').value;
     const newPassword = document.getElementById('new-password').value;
     const confirmPassword = document.getElementById('confirm-password').value;
     credentialMessage.textContent = '';
-    if (!currentPassword || !newUsername || !newPassword) {
-        credentialMessage.textContent = 'すべての必須項目を入力してください。';
-        credentialMessage.className = 'text-red-500 text-sm mt-2';
-        return;
-    }
-    if (newPassword !== confirmPassword) {
-        credentialMessage.textContent = '新しいパスワードが一致しません。';
-        credentialMessage.className = 'text-red-500 text-sm mt-2';
-        return;
-    }
+    if (!currentPassword || !newUsername || !newPassword) { credentialMessage.textContent = 'すべての必須項目を入力してください。'; credentialMessage.className = 'text-red-500 text-sm mt-2'; return; }
+    if (newPassword !== confirmPassword) { credentialMessage.textContent = '新しいパスワードが一致しません。'; credentialMessage.className = 'text-red-500 text-sm mt-2'; return; }
     callGas('changeCredentials', { currentPassword, newUsername, newPassword })
         .then(result => {
             if (result.success) {
@@ -213,6 +224,7 @@ function handleChangeCredentials() {
             }
         });
 }
+*/
 
 // --- Main Admin Panel Functions ---
 async function initializeAdminPanel() {
@@ -243,14 +255,23 @@ async function switchSheet(sheetName) {
         tab.classList.toggle('border-blue-500', tab.dataset.sheetName === sheetName);
         tab.classList.toggle('text-blue-600', tab.dataset.sheetName === sheetName);
     });
+    
+    const isReadOnlySheet = (sheetName === 'ログ' || sheetName === 'ログ集計');
     addRowButton.classList.toggle('hidden', sheetName !== 'コンテンツデータ');
-    const data = allSheetData[currentSheet];
-    renderTable(data);
+    saveButton.classList.toggle('hidden', isReadOnlySheet);
+    
+    if (sheetName === 'ログ集計') {
+        renderLogSummary();
+    } else {
+        const data = allSheetData[currentSheet];
+        renderTable(data);
+    }
 }
 
 function renderTable(dataObject) {
     const headers = dataObject.headers || [];
     const rows = dataObject.rows || [];
+    const isLogSheet = (currentSheet === 'ログ');
 
     if (headers.length === 0) {
         tableHead.innerHTML = '<tr><th>シートが見つからないか、ヘッダーがありません</th></tr>';
@@ -258,7 +279,7 @@ function renderTable(dataObject) {
         return;
     }
 
-    tableHead.innerHTML = `<tr>${headers.map(h => `<th class="px-4 py-2">${h}</th>`).join('')}<th>削除</th></tr>`;
+    tableHead.innerHTML = `<tr>${headers.map(h => `<th class="px-4 py-2">${h}</th>`).join('')}${isLogSheet ? '' : '<th>削除</th>'}</tr>`;
 
     if (rows.length === 0) {
         tableBody.innerHTML = '<tr><td colspan="' + (headers.length + 1) + '" class="text-center p-4">データがありません。</td></tr>';
@@ -271,28 +292,117 @@ function renderTable(dataObject) {
         tr.className = "bg-white border-b";
         headers.forEach(header => {
             const td = document.createElement('td');
-            td.style.minWidth = header === 'phaseDescription' ? '400px' : '200px';
-            const textarea = document.createElement('textarea');
-            textarea.value = row[header] || '';
-            textarea.dataset.rowIndex = rowIndex;
-            textarea.dataset.header = header;
-            td.appendChild(textarea);
+            
+            if (isLogSheet) {
+                const div = document.createElement('div');
+                div.className = 'readonly-cell';
+                div.textContent = row[header] || '';
+                td.appendChild(div);
+            } else {
+                td.style.minWidth = header === 'phaseDescription' ? '400px' : '200px';
+                const textarea = document.createElement('textarea');
+                textarea.value = row[header] || '';
+                textarea.dataset.rowIndex = rowIndex;
+                textarea.dataset.header = header;
+                td.appendChild(textarea);
+            }
             tr.appendChild(td);
         });
-        const deleteTd = document.createElement('td');
-        if (currentSheet === 'コンテンツデータ' && row['dataType'] === 'phase') {
-            const deleteButton = document.createElement('button');
-            deleteButton.textContent = '削除';
-            deleteButton.className = 'bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600';
-            deleteButton.onclick = () => handleDeleteRow(rowIndex);
-            deleteTd.appendChild(deleteButton);
+
+        if (!isLogSheet) {
+            const deleteTd = document.createElement('td');
+            if (currentSheet === 'コンテンツデータ' && row['dataType'] === 'phase') {
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = '削除';
+                deleteButton.className = 'bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600';
+                deleteButton.onclick = () => handleDeleteRow(rowIndex);
+                deleteTd.appendChild(deleteButton);
+            }
+            tr.appendChild(deleteTd);
         }
-        tr.appendChild(deleteTd);
+        
         tableBody.appendChild(tr);
     });
 }
 
+function renderLogSummary() {
+    const logData = allSheetData['ログ'];
+    if (!logData || !logData.rows || logData.rows.length === 0) {
+        tableHead.innerHTML = '<tr><th>ログデータがありません</th></tr>';
+        tableBody.innerHTML = '';
+        return;
+    }
+
+    tableHead.innerHTML = `
+        <tr>
+            <th class="px-4 py-2">ユーザー名</th>
+            <th class="px-4 py-2">実施日時</th>
+            <th class="px-4 py-2">総回答時間 (秒)</th>
+            <th class="px-4 py-2">最終結果</th>
+            <th class="px-4 py-2">最終スコア</th>
+            <th class="px-4 py-2">詳細</th>
+        </tr>`;
+
+    const sessions = {};
+    logData.rows.forEach(row => {
+        if (!sessions[row.SessionID]) {
+            sessions[row.SessionID] = [];
+        }
+        sessions[row.SessionID].push(row);
+    });
+
+    tableBody.innerHTML = '';
+    
+    for (const sessionId in sessions) {
+        const sessionRows = sessions[sessionId];
+        const firstRow = sessionRows[0];
+        const lastRow = sessionRows[sessionRows.length - 1];
+        
+        const totalTime = sessionRows.reduce((sum, row) => sum + (parseFloat(row['TimeTaken(sec)']) || 0), 0).toFixed(1);
+        
+        const summaryRow = document.createElement('tr');
+        summaryRow.className = 'summary-row bg-white border-b';
+        summaryRow.innerHTML = `
+            <td>${firstRow.UserID}</td>
+            <td>${new Date(firstRow.Timestamp).toLocaleString('ja-JP')}</td>
+            <td>${totalTime}</td>
+            <td>${lastRow.FinalResult}</td>
+            <td class="readonly-cell">${lastRow.Score}</td>
+            <td>クリックして詳細表示</td>
+        `;
+        
+        const detailRow = document.createElement('tr');
+        detailRow.className = 'summary-details';
+        let detailHtml = '<td colspan="6"><div class="p-4">';
+        detailHtml += '<h4 class="text-md font-bold mb-2">回答詳細</h4>';
+        detailHtml += '<table class="min-w-full text-sm">';
+        detailHtml += '<thead class="bg-gray-200"><tr><th class="p-2 text-left">質問</th><th class="p-2 text-left">回答</th><th class="p-2 text-left">所要時間(秒)</th></tr></thead><tbody>';
+        
+        sessionRows.forEach(row => {
+            if (row.PhaseID !== 'RESULT') {
+                detailHtml += `<tr class="border-b">
+                    <td class="p-2 readonly-cell">${row.Question}</td>
+                    <td class="p-2 readonly-cell">${row.Choice}</td>
+                    <td class="p-2">${row['TimeTaken(sec)']}</td>
+                </tr>`;
+            }
+        });
+        
+        detailHtml += '</tbody></table></div></td>';
+        detailRow.innerHTML = detailHtml;
+
+        tableBody.appendChild(summaryRow);
+        tableBody.appendChild(detailRow);
+
+        summaryRow.addEventListener('click', () => {
+            detailRow.classList.toggle('open');
+        });
+    }
+}
+
+
 function handleSave() {
+    if (currentSheet === 'ログ' || currentSheet === 'ログ集計') return;
     updateLocalDataFromTable();
     const dataToSave = allSheetData[currentSheet].rows;
     if (confirm('この変更を保存しますか？')) {
@@ -307,28 +417,16 @@ function handleSave() {
     }
 }
 
-// ★★★★★【修正済み】★★★★★
 function handleAddRow() {
     if (currentSheet !== 'コンテンツデータ') return;
     const headers = allSheetData[currentSheet].headers;
-
     if (!headers || headers.length === 0) {
         alert('シートの列情報を取得できません。先にスプレッドシート側でヘッダー（1行目）を入力してください。');
         return;
     }
-
-    const newRecord = headers.reduce((acc, header) => {
-        acc[header] = '';
-        return acc;
-    }, {});
-    
-    // ご要望に基づき、dataType列に'***'を設定して空行を防ぐ
-    if (headers.includes('dataType')) {
-        newRecord['dataType'] = '***';
-    } else {
-        // dataType列がない場合のフォールバックとして、最初の列に印をつける
-        newRecord[headers[0]] = ' '; 
-    }
+    const newRecord = headers.reduce((acc, header) => ({ ...acc, [header]: '' }), {});
+    if (headers.includes('dataType')) { newRecord['dataType'] = '***'; } 
+    else { newRecord[headers[0]] = ' '; }
 
     if (confirm('新しい空のレコードを末尾に追加しますか？')) {
         callGas('addRow', { sheetName: 'コンテンツデータ', record: newRecord })
@@ -344,6 +442,7 @@ function handleAddRow() {
 }
 
 function handleDeleteRow(rowIndex) {
+    if (currentSheet === 'ログ' || currentSheet === 'ログ集計') return;
     if (currentSheet !== 'コンテンツデータ') return;
     const rowNumber = rowIndex + 2; 
     if (confirm(`${rowIndex + 1}行目のレコードを削除しますか？この操作は元に戻せません。`)) {
@@ -387,6 +486,7 @@ async function handlePreviewUpdate() {
 }
 
 function updateLocalDataFromTable() {
+    if (currentSheet === 'ログ' || currentSheet === 'ログ集計') return; 
     const rows = tableBody.rows;
     if (rows.length === 0 || (rows.length === 1 && rows[0].cells.length <= 1)) {
         allSheetData[currentSheet].rows = [];
@@ -414,7 +514,7 @@ async function callGas(action, payload = {}) {
 
     const spreadsheetId = localStorage.getItem('jobsim_spreadsheet_id');
     if (!GAS_URL || GAS_URL === 'YOUR_GAS_URL_HERE') {
-        loginError.textContent = 'URLが設定されていません。HTMLファイルを編集してください。';
+        loginError.textContent = 'パラメータが正しく設定されていません。HTMLファイルを編集してください。';
         document.getElementById('loading-overlay').classList.add('hidden');
         return { success: false, message: 'GAS URL not configured' };
     }
@@ -435,7 +535,7 @@ async function callGas(action, payload = {}) {
         return await res.json();
     } catch (e) {
         console.error('GAS call failed:', e);
-        loginError.textContent = '通信に失敗しました。URLが正しいか、CORS設定がされているか確認してください。';
+        loginError.textContent = 'サーバとの通信に失敗しました。URLが正しいか、CORS設定がされているか確認してください。';
         alert('エラーが発生しました。コンソールを確認してください。');
         return { success: false, message: e.message };
     } finally {
