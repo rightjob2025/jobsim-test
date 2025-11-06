@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ジョブシミュレーション（プレビュー）</title>
+    <title>ジョブシミュレーション</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- PDF Generation Libraries -->
@@ -78,10 +78,9 @@
     </footer>
 
 <script>
-// ★★★★★【注意】★★★★★
-// このファイルはプレビュー専用です。本番では`jobsim_production.html`をご利用ください。
-const GAS_URL = 'https://script.google.com/macros/s/AKfycby5J6CR-pgF8imIIlmGagEnSaXLzrzmWpubR9gg_VcwILRvvnUhtJ0BVCTXhk5anvsL/exec';
-const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE';
+// ★★★★★【本番用設定】★★★★★
+// Google Apps ScriptのウェブアプリURLをここに設定してください。
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxzkrTi4wqj75kf9FzWI0wuYmoEvVtlJEUS2iT2B-Nn_hnSsbQQR4tQ133lYwLpFTOq/exec';
 
 // --- Global Variables ---
 let gameData = {};
@@ -90,6 +89,10 @@ let userName = '';
 let currentPhaseId = 'prologue';
 let finalEndContent = null;
 let lastDisplayedMessage = '';
+let sessionLog = [];
+let sessionID = '';
+let phaseStartTime = 0;
+let SPREADSHEET_ID = ''; // URLパラメータから取得します
 
 // --- DOM Elements ---
 const mainHeaderLogo = document.getElementById('main-header-logo');
@@ -118,37 +121,28 @@ const confirmRetryYes = document.getElementById('confirmRetryYes');
 const confirmRetryNo = document.getElementById('confirmRetryNo');
 
 
-// ★★★★★【プレビュー機能】★★★★★
-window.addEventListener('message', receivePreviewData);
-function receivePreviewData(event) {
-    if (event.data && event.data.type === 'JOB_SIM_PREVIEW_DATA') {
-        console.log('プレビューデータを受信しました:', event.data.payload);
-        initializeGame(event.data.payload);
-    }
-}
-
 // --- Initialization ---
-document.addEventListener('DOMContentLoaded', () => {
-    setupEventListeners();
-    if (window.self === window.top) {
-        fetchAndInitialize();
-    } else {
-        console.log("プレビューモードで待機中...");
-    }
-});
+document.addEventListener('DOMContentLoaded', fetchAndInitialize);
 
 async function fetchAndInitialize() {
+    setupEventListeners();
     userNameInput.value = localStorage.getItem('jobsim_userName') || '';
     if(copyrightYearEl) {
         copyrightYearEl.textContent = new Date().getFullYear();
     }
     startButton.disabled = true;
     startButton.textContent = 'データを読み込み中...';
-    if (SPREADSHEET_ID === 'YOUR_SPREADSHEET_ID_HERE') {
-        alert('エラー: スプレッドシートIDが設定されていません。HTMLファイルを編集してください。');
+
+    // URLパラメータからスプレッドシートIDを取得
+    const urlParams = new URLSearchParams(window.location.search);
+    SPREADSHEET_ID = urlParams.get('id'); // URL末尾に ?id=... で指定
+
+    if (!SPREADSHEET_ID) {
+        alert('エラー: スプレッドシートIDがURLに指定されていません。\n例： .../file.html?id=YOUR_SHEET_ID');
         startButton.textContent = '設定エラー';
         return;
     }
+
     try {
         const urlWithParams = `${GAS_URL}?spreadsheetId=${SPREADSHEET_ID}&v=${new Date().getTime()}`;
         const data = await fetchJSONP(urlWithParams);
@@ -221,10 +215,102 @@ function setupEventListeners() {
 
 function validateUserName() { startButton.disabled = !userNameInput.value.trim() || !gameData.settings; }
 function showScreen(screenName) { Object.values(screens).forEach(screen => screen.classList.add('hidden')); screens[screenName].classList.remove('hidden'); if (['top', 'game', 'result'].includes(screenName)) { screens[screenName].classList.add('flex'); } }
-function startGame() { userName = userNameInput.value.trim(); localStorage.setItem('jobsim_userName', userName); showScreen('game'); renderPhase(currentPhaseId); }
+
+function startGame() {
+    userName = userNameInput.value.trim();
+    localStorage.setItem('jobsim_userName', userName);
+    sessionLog = [];
+    sessionID = Date.now() + '-' + userName;
+    showScreen('game');
+    renderPhase(currentPhaseId);
+}
+
 function resetGame() { currentPhaseId = 'prologue'; scores = {}; chatContainer.innerHTML = ''; showScreen('top'); }
-async function renderPhase(phaseId) { const phase = gameData.contents.find(p => p.phaseId?.trim() === phaseId?.trim()); if (!phase) { const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === phaseId); if(endContent) { showResult(endContent); } else { alert(`次のコンテンツが見つかりません。(ID: ${phaseId})`); } return; } currentPhaseId = phaseId; phaseTitleEl.textContent = phase.phaseTitle || ''; await displayMessages(phase.phaseDescription); if (phase.taskContent) await displayMedia(phase.taskContent); chatContainer.scrollTop = chatContainer.scrollHeight; const isQuestionPage = phase.taskName?.trim() && phase.choice1_text?.trim(); hintButton.classList.toggle('hidden', !(isQuestionPage && gameData.hints?.[phaseId.trim()])); if (isQuestionPage) { await displayMessage(phase.taskName, 'system'); let choices = []; for (let i = 1; i <= 3; i++) { if (phase[`choice${i}_text`]?.trim()) { choices.push({ text: phase[`choice${i}_text`], score: JSON.parse(phase[`choice${i}_score`] || '{}'), nextPhaseId: phase[`choice${i}_nextPhaseId`], message: phase[`choice${i}_message`] }); } } choices = shuffle(choices); createChoiceButtons(choices); } else { const nextPhaseId = phase.choice1_nextPhaseId; if (nextPhaseId?.trim()) { const delay = Number(gameData.settings.sleepNext) || 1500; await sleep(delay); renderPhase(nextPhaseId.trim()); } else { showResult(calculateEnd()); } } }
-async function handleChoice(choice) { document.getElementById('button-wrapper')?.remove(); await displayMessage(choice.text, 'character', userName || 'あなた'); Object.keys(choice.score).forEach(key => { scores[key] = (scores[key] || 0) + Number(choice.score[key] || 0); }); if (choice.message) await displayMessages(choice.message); const delay = Number(gameData.settings.sleepChoice) || 1000; await sleep(delay); const nextPhase = choice.nextPhaseId?.trim(); if (nextPhase?.startsWith('end')) { const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === nextPhase); showResult(endContent || calculateEnd()); } else if (nextPhase) { renderPhase(nextPhase); } else { showResult(calculateEnd()); } }
+
+async function renderPhase(phaseId) {
+    const phase = gameData.contents.find(p => p.phaseId?.trim() === phaseId?.trim());
+    if (!phase) {
+        const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === phaseId);
+        if(endContent) {
+            showResult(endContent); 
+        } else {
+            alert(`次のコンテンツが見つかりません。(ID: ${phaseId})`);
+        }
+        return;
+    }
+    currentPhaseId = phaseId;
+    phaseTitleEl.textContent = phase.phaseTitle || '';
+    await displayMessages(phase.phaseDescription);
+    if (phase.taskContent) await displayMedia(phase.taskContent);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    const isQuestionPage = phase.taskName?.trim() && phase.choice1_text?.trim();
+    hintButton.classList.toggle('hidden', !(isQuestionPage && gameData.hints?.[phaseId.trim()]));
+
+    if (isQuestionPage) {
+        await displayMessage(phase.taskName, 'system');
+        let choices = [];
+        for (let i = 1; i <= 3; i++) {
+            if (phase[`choice${i}_text`]?.trim()) {
+                choices.push({
+                    text: phase[`choice${i}_text`],
+                    score: JSON.parse(phase[`choice${i}_score`] || '{}'),
+                    nextPhaseId: phase[`choice${i}_nextPhaseId`],
+                    message: phase[`choice${i}_message`]
+                });
+            }
+        }
+        
+        phaseStartTime = Date.now();
+        choices = shuffle(choices);
+        createChoiceButtons(choices);
+    } else {
+        const nextPhaseId = phase.choice1_nextPhaseId;
+        if (nextPhaseId?.trim()) {
+            const delay = Number(gameData.settings.sleepNext) || 1500;
+            await sleep(delay);
+            renderPhase(nextPhaseId.trim());
+        } else {
+            showResult(calculateEnd());
+        }
+    }
+}
+
+async function handleChoice(choice) {
+    document.getElementById('button-wrapper')?.remove();
+    const timeTaken = ((Date.now() - phaseStartTime) / 1000).toFixed(1); 
+    
+    sessionLog.push({
+        sessionID: sessionID,
+        timestamp: new Date().toISOString(),
+        userName: userName,
+        phaseId: currentPhaseId,
+        question: document.getElementById('chat-container').lastChild.textContent,
+        choice: choice.text,
+        score: JSON.stringify(choice.score),
+        timeTaken: timeTaken,
+        result: '' 
+    });
+
+    await displayMessage(choice.text, 'character', userName || 'あなた');
+    Object.keys(choice.score).forEach(key => {
+        scores[key] = (scores[key] || 0) + Number(choice.score[key] || 0);
+    });
+    if (choice.message) await displayMessages(choice.message);
+    
+    const delay = Number(gameData.settings.sleepChoice) || 1000;
+    await sleep(delay);
+    
+    const nextPhase = choice.nextPhaseId?.trim();
+    if (nextPhase?.startsWith('end')) {
+        const endContent = gameData.contents.find(c => c.dataType === 'end' && c.endId === nextPhase);
+        showResult(endContent || calculateEnd());
+    } else if (nextPhase) {
+        renderPhase(nextPhase);
+    } else {
+        showResult(calculateEnd());
+    }
+}
+
 function calculateEnd() { if (!gameData.logics?.length) return gameData.contents.find(c => c.dataType === 'end'); const sortedLogics = [...gameData.logics].sort((a, b) => a.priority - b.priority); for (const logic of sortedLogics) { try { if (!logic.condition) continue; const condition = String(logic.condition).replace(/([a-zA-Z_]\w*)/g, match => `(scores['${match}'] || 0)`); if (eval(condition)) { return gameData.contents.find(c => c.dataType === 'end' && c.endId === logic.endId); } } catch (e) { console.error(`Error in condition for endId ${logic.endId}:`, e); } } return gameData.contents.find(c => c.dataType === 'end'); }
 async function displayMessages(description) { if (!description?.trim()) return; const formattedDescription = description.replace(/{{userName}}/g, userName || 'あなた'); if (formattedDescription === lastDisplayedMessage) return; lastDisplayedMessage = formattedDescription; const messages = formattedDescription.split(/<br\s*\/?>/g).filter(m => m.trim()); for (const msg of messages) { const match = msg.trim().match(/^\[(.*?)\](.*)/); await displayMessage(match ? match[2].trim() : msg.trim(), match ? 'character' : 'system', match ? match[1] : ''); const delay = Number(gameData.settings.sleepMessage) || 800; await sleep(delay); } }
 function displayMessage(text, type = 'system', speaker = '') { return new Promise(resolve => { const messageWrapper = document.createElement('div'); const iconUrl = gameData.speakers?.[speaker]; if (type === 'character') { const isUser = speaker === (userName || 'あなた'); const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="${speaker}" class="w-10 h-10 rounded-full object-cover">` : `<div class="w-10 h-10 rounded-full flex items-center justify-center font-bold bg-gray-200">${speaker.charAt(0)}</div>`; messageWrapper.className = `message flex items-start gap-3 ${isUser ? 'justify-end' : ''}`; const messageContent = `<div class="flex flex-col ${isUser ? 'items-end' : 'items-start'}"><p class="font-bold">${speaker}</p><div class="mt-1 text-white ${isUser ? 'bg-blue-500' : 'bg-gray-500'} rounded-lg p-3">${text}</div></div>`; messageWrapper.innerHTML = isUser ? messageContent + iconHtml : iconHtml + messageContent; } else { messageWrapper.className = 'message w-full'; messageWrapper.innerHTML = `<div class="text-gray-800 bg-gray-200 border-l-4 border-gray-400 p-3">${text}</div>`; } chatContainer.appendChild(messageWrapper); chatContainer.scrollTop = chatContainer.scrollHeight; setTimeout(resolve, 300); }); }
@@ -256,10 +342,57 @@ function showDashboard() { screens.dashboard.classList.remove('hidden'); renderR
 function hideDashboard() { screens.dashboard.classList.add('hidden'); }
 function showHint() { const hint = gameData.hints[currentPhaseId.trim()]; if (hint) { hintTextEl.textContent = hint; screens.hint.classList.remove('hidden'); } }
 function hideHint() { screens.hint.classList.add('hidden'); }
-function showResult(endContent) { finalEndContent = endContent; preResultMessageEl.textContent = `${userName}さん、お疲れ様でした！結果を見てみましょう。`; screens.preResult.classList.remove('hidden'); }
+
+function showResult(endContent) {
+    finalEndContent = endContent;
+    preResultMessageEl.textContent = `${userName}さん、お疲れ様でした！結果を見てみましょう。`;
+    screens.preResult.classList.remove('hidden');
+    sessionLog.push({
+        sessionID: sessionID,
+        timestamp: new Date().toISOString(),
+        userName: userName,
+        phaseId: 'RESULT',
+        question: '最終結果',
+        choice: '',
+        score: JSON.stringify(scores),
+        timeTaken: 0,
+        result: endContent.endTitle || 'N/A'
+    });
+    saveLogData(sessionLog);
+}
+
 function displayFinalResult() { screens.preResult.classList.add('hidden'); showScreen('result'); resultTitleEl.textContent = finalEndContent.endTitle || 'シミュレーション終了'; resultMessageEl.textContent = (finalEndContent.endMessage || '').replace(/{{userName}}/g, userName || 'あなた'); renderRadarChart('resultRadarChart', scores); }
 function openInterviewLink() { if (gameData.settings?.interviewUrl) { window.open(gameData.settings.interviewUrl, '_blank'); } else { alert('URLが設定されていません。'); } }
 async function generateCertificate() { alert('修了証は現在開発中です。'); }
+
+async function saveLogData(logData) {
+    if (!SPREADSHEET_ID) {
+        console.error('ログ保存失敗: スプレッドシートIDがありません。');
+        return;
+    }
+    try {
+        const response = await fetch(GAS_URL, {
+            method: 'POST',
+            mode: 'cors',
+            credentials: 'omit',
+            body: JSON.stringify({
+                action: 'saveLog',
+                spreadsheetId: SPREADSHEET_ID,
+                logData: logData 
+            }),
+            redirect: 'follow'
+        });
+        
+        if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
+        const result = await response.json();
+        if (result.success) { console.log('ログが正常に保存されました。'); } 
+        else { console.error('ログの保存に失敗しました:', result.message); }
+    } catch (error) {
+        console.error('ログの送信中にエラーが発生しました:', error);
+    }
+}
+
+
 function fetchJSONP(url) { return new Promise((resolve, reject) => { const cb = 'j' + Math.random().toString(36).substr(2); window[cb] = d => { delete window[cb]; document.body.removeChild(s); resolve(d); }; const s = document.createElement('script'); s.src = `${url}&callback=${cb}`; s.onerror = () => reject(new Error('GAS script fetch failed.')); document.body.appendChild(s); }); }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function shuffle(array) {
