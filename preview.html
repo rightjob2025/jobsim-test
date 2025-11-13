@@ -20,6 +20,11 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .choice-button { transition: all 0.2s ease-in-out; }
         .choice-button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.1); }
+        /* ★★★★★ 修正点 ★★★★★ */
+        /* topText内のリンクスタイルを追加 */
+        #topText a { color: #2563eb; text-decoration: underline; }
+        #topText a:hover { color: #1d4ed8; }
+        /* ★★★★★ 修正ここまで ★★★★★ */
     </style>
 </head>
 <body class="bg-gray-100 flex flex-col min-h-screen">
@@ -36,9 +41,22 @@
             <img id="topLogo" src="" alt="Company Logo" class="h-16 mb-6 hidden">
             <h1 id="gameTitle" class="text-4xl font-bold text-gray-800 mb-4 text-center"></h1>
             <p class="text-gray-600 mb-8">あなたのキャリアを選択するシミュレーションゲーム</p>
+            
+            <!-- top_text はボタンの下に移動するため、ここからは削除 -->
+
             <div class="w-full max-w-sm">
+                 <!-- ★★★★★ 修正点 (1) ★★★★★ -->
+                 <!-- テキストボックスの上にラベルを追加 -->
+                 <label for="userName" class="block text-sm font-medium text-gray-600 mb-1 hidden">あなたのプレイヤー名を入力してください</label>
+                 <!-- ★★★★★ 修正ここまで ★★★★★ -->
+
                  <input type="text" id="userName" placeholder="あなたの名前を入力してください" class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 text-lg">
                  <button id="startButton" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition duration-300 shadow-lg text-lg disabled:bg-gray-400">シミュレーションを開始</button>
+
+                 <!-- ★★★★★ 修正点 (2) & (3) ★★★★★ -->
+                 <!-- top_text をボタンの下に移動し、フォントサイズとマージンを変更 -->
+                 <div id="topText" class="text-gray-700 mt-6 text-xs sm:text-sm whitespace-pre-wrap"></div>
+                 <!-- ★★★★★ 修正ここまで ★★★★★ -->
             </div>
         </div>
 
@@ -98,6 +116,9 @@ const footerCompanyName = document.getElementById('footer-company-name');
 const copyrightYearEl = document.getElementById('copyright-year');
 const screens = { top: document.getElementById('screen-top'), game: document.getElementById('screen-game'), dashboard: document.getElementById('screen-dashboard'), hint: document.getElementById('screen-hint'), preResult: document.getElementById('screen-pre-result'), result: document.getElementById('screen-result'), retryConfirm: document.getElementById('screen-retry-confirm') };
 const gameTitleEl = document.getElementById('gameTitle');
+// ★★★★★ 修正点 ★★★★★
+const topTextEl = document.getElementById('topText'); // topText要素を取得
+// ★★★★★ 修正ここまで ★★★★★
 const userNameInput = document.getElementById('userName');
 const startButton = document.getElementById('startButton');
 const chatContainer = document.getElementById('chat-container');
@@ -172,6 +193,15 @@ function initializeGame(data) {
         return;
     }
     gameTitleEl.textContent = gameData.settings.gameTitle || 'ジョブシミュレーション';
+
+    // ★★★★★ 修正点 ★★★★★
+    // top_text があれば表示 (innerHTMLを使い、HTMLタグを解釈させる)
+    if (gameData.settings.top_text && topTextEl) {
+        topTextEl.innerHTML = gameData.settings.top_text;
+    } else if (topTextEl) {
+        topTextEl.innerHTML = ''; // データがない場合は空にする
+    }
+    // ★★★★★ 修正ここまで ★★★★★
     
     if (gameData.settings.companyName) {
         mainHeaderCompanyName.textContent = gameData.settings.companyName;
@@ -259,7 +289,119 @@ function hideHint() { screens.hint.classList.add('hidden'); }
 function showResult(endContent) { finalEndContent = endContent; preResultMessageEl.textContent = `${userName}さん、お疲れ様でした！結果を見てみましょう。`; screens.preResult.classList.remove('hidden'); }
 function displayFinalResult() { screens.preResult.classList.add('hidden'); showScreen('result'); resultTitleEl.textContent = finalEndContent.endTitle || 'シミュレーション終了'; resultMessageEl.textContent = (finalEndContent.endMessage || '').replace(/{{userName}}/g, userName || 'あなた'); renderRadarChart('resultRadarChart', scores); }
 function openInterviewLink() { if (gameData.settings?.interviewUrl) { window.open(gameData.settings.interviewUrl, '_blank'); } else { alert('URLが設定されていません。'); } }
-async function generateCertificate() { alert('修了証は現在開発中です。'); }
+async function generateCertificate() {
+    alert('修了証を生成中です...完了したら自動で保存されます。\n（プレビュー環境ではGoogle Driveへの保存は機能しない場合があります）');
+    
+    const { jsPDF } = window.jspdf;
+    const certificateElement = createCertificateElement();
+    document.body.appendChild(certificateElement);
+
+    try {
+        // useCORS: true enables cross-origin image loading
+        const canvas = await html2canvas(certificateElement, { scale: 3, useCORS: true });
+        const imgData = canvas.toDataURL('image/png');
+        
+        const pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'px',
+            format: [canvas.width, canvas.height]
+        });
+        
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        // ファイル名の日付形式を修正
+        const pdfFileName = `修了証_${userName}_${new Date().toLocaleDateString('ja-JP').replace(/\//g, '-')}.pdf`;
+        pdf.save(pdfFileName);
+
+        // プレビューでもDrive保存を試みる（失敗する可能性あり）
+        await saveCertificateToDrive(pdf.output('datauristring'), pdfFileName);
+
+    } catch(err) {
+        console.error("PDF Generation Error:", err);
+        alert("修了証の生成に失敗しました。ロゴ画像のURLが正しいか、また画像サーバーがCORSリクエストを許可しているか確認してください。");
+    } finally {
+        if (document.body.contains(certificateElement)) {
+            document.body.removeChild(certificateElement);
+        }
+    }
+}
+
+// ★★★★★ ここから追加 ★★★★★
+async function saveCertificateToDrive(base64Data, fileName) {
+    if (!SPREADSHEET_ID || SPREADSHEET_ID === 'YOUR_SPREADSHEET_ID_HERE') {
+        console.warn('PDF保存スキップ: スプレッドシートIDが設定されていません。(プレビューモード)');
+        // プレビュー中はアラートを出さない
+        // alert('PDF保存スキップ: スプレッドシートIDが設定されていません。');
+        return;
+    }
+    try {
+        const response = await fetch(GAS_URL, { // GAS_URL はプレビュー用URL
+            method: 'POST',
+            mode: 'cors', // プレビュー環境では 'cors' が失敗する可能性がある
+            credentials: 'omit',
+            body: JSON.stringify({
+                action: 'savePdf',
+                spreadsheetId: SPREADSHEET_ID,
+                data: base64Data,
+                fileName: fileName
+            }),
+            redirect: 'follow'
+        });
+        
+        if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
+        const result = await response.json();
+        if (result.status === "success") {
+            console.log('修了証がGoogle Driveに保存されました。');
+            alert('修了証がGoogle Driveに保存されました。');
+        } else {
+            console.error('Driveへの保存に失敗しました:', result.message);
+            alert(`修了証のGoogle Driveへの保存に失敗しました: ${result.message}`);
+        }
+    } catch (error) {
+        console.error('修了証のGoogle Driveへの送信中にエラーが発生しました:', error);
+        // プレビュー環境ではCORSエラーがよく発生するため、アラートを調整
+        alert(`修了証のGoogle Driveへの送信中にエラーが発生しました: ${error.message}\n(プレビュー環境ではCORSエラーにより失敗することがあります)`);
+    }
+}
+
+function createCertificateElement() {
+    const now = new Date();
+    const dateString = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+    
+    // The logo URL is now directly used in the img tag's src.
+    // html2canvas with useCORS:true will handle the fetching.
+    const logoUrl = gameData.settings.companyLogoUrl || '';
+
+    const element = document.createElement('div');
+    element.style.width = '1056px';
+    element.style.height = '816px';
+    element.style.position = 'absolute';
+    element.style.left = '-9999px';
+    element.style.backgroundColor = 'white';
+    element.style.padding = '40px';
+    element.innerHTML = `
+        <div style="border: 10px solid #4a90e2; height: 100%; padding: 40px; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;">
+            <div>
+                <h1 style="text-align: center; font-size: 48px; color: #333; margin-bottom: 20px;">修了証</h1>
+                <p style="text-align: center; font-size: 24px; margin-bottom: 60px;">${userName} 様</p>
+                <p style="text-align: center; font-size: 20px; line-height: 1.6;">
+                    あなたは「${gameData.settings.certificateCourseName || gameData.settings.gameTitle || '本コース'}」の<br>全課程を修了したことを証します
+                </p>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                <div></div>
+                <div style="text-align: right;">
+                    <p style="font-size: 18px; margin: 0 0 10px 0;">${dateString}</p>
+                    <p style="font-size: 22px; font-weight: bold; margin: 0;">${gameData.settings.companyName || gameData.settings.gameTitle || ''}</p>
+                    ${logoUrl ? `<img src="${logoUrl}" crossOrigin="anonymous" alt="Logo" style="max-height: 60px; margin-top: 10px; margin-left: auto;">` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    return element;
+}
+// ★★★★★ 追加ここまで ★★★★★
+
+
 function fetchJSONP(url) { return new Promise((resolve, reject) => { const cb = 'j' + Math.random().toString(36).substr(2); window[cb] = d => { delete window[cb]; document.body.removeChild(s); resolve(d); }; const s = document.createElement('script'); s.src = `${url}&callback=${cb}`; s.onerror = () => reject(new Error('GAS script fetch failed.')); document.body.appendChild(s); }); }
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function shuffle(array) {
