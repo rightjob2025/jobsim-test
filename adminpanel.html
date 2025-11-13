@@ -175,6 +175,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     spreadsheetIdInput.value = localStorage.getItem('jobsim_spreadsheet_id') || '';
+
+    // URLパラメータから値を取得してフォームに設定
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlId = urlParams.get('id');
+        const urlUser = urlParams.get('user');
+        const urlPass = urlParams.get('pass');
+
+        if (urlId) {
+            spreadsheetIdInput.value = urlId;
+            // URLでIDが指定された場合、localStorageにも保存する
+            localStorage.setItem('jobsim_spreadsheet_id', urlId);
+        }
+        if (urlUser) {
+            usernameInput.value = urlUser;
+        }
+        if (urlPass) {
+            passwordInput.value = urlPass;
+        }
+    } catch(e) {
+        console.error("URLパラメータの読み込みに失敗しました:", e);
+    }
+    // ★★★★★ 修正ここまで ★★★★★
+
+    
     checkLogin();
 });
 
@@ -184,7 +209,7 @@ function handleLogin() {
     const spreadsheetId = spreadsheetIdInput.value.trim();
     const username = usernameInput.value;
     const password = passwordInput.value;
-    if (!spreadsheetId) { loginError.textContent = 'スプレッドシートIDを入力してください。'; return; }
+    if (!spreadsheetId) { loginError.textContent = 'ジョブシムIDを入力してください。'; return; }
     if (!username || !password) { loginError.textContent = 'ユーザー名とパスワードを入力してください。'; return; }
     loginError.textContent = '';
     localStorage.setItem('jobsim_spreadsheet_id', spreadsheetId);
