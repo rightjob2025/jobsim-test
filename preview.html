@@ -166,7 +166,7 @@ async function fetchAndInitialize() {
     startButton.disabled = true;
     startButton.textContent = 'データを読み込み中...';
     if (SPREADSHEET_ID === 'YOUR_SPREADSHEET_ID_HERE') {
-        alert('エラー: スプレッドシートIDが設定されていません。HTMLファイルを編集してください。');
+        alert('エラー: ジョブシムIDが設定されていません。HTMLファイルを編集してください。');
         startButton.textContent = '設定エラー';
         return;
     }
@@ -328,9 +328,9 @@ async function generateCertificate() {
 // ★★★★★ ここから追加 ★★★★★
 async function saveCertificateToDrive(base64Data, fileName) {
     if (!SPREADSHEET_ID || SPREADSHEET_ID === 'YOUR_SPREADSHEET_ID_HERE') {
-        console.warn('PDF保存スキップ: スプレッドシートIDが設定されていません。(プレビューモード)');
+        console.warn('PDF保存スキップ: ジョブシムIDが設定されていません。(プレビューモード)');
         // プレビュー中はアラートを出さない
-        // alert('PDF保存スキップ: スプレッドシートIDが設定されていません。');
+        // alert('PDF保存スキップ: ジョブシムIDが設定されていません。');
         return;
     }
     try {
@@ -350,16 +350,16 @@ async function saveCertificateToDrive(base64Data, fileName) {
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         const result = await response.json();
         if (result.status === "success") {
-            console.log('修了証がGoogle Driveに保存されました。');
-            alert('修了証がGoogle Driveに保存されました。');
+            console.log('修了証が保存されました。');
+            alert('修了証が保存されました。');
         } else {
-            console.error('Driveへの保存に失敗しました:', result.message);
-            alert(`修了証のGoogle Driveへの保存に失敗しました: ${result.message}`);
+            console.error('保存に失敗しました:', result.message);
+            alert(`修了証の保存に失敗しました: ${result.message}`);
         }
     } catch (error) {
-        console.error('修了証のGoogle Driveへの送信中にエラーが発生しました:', error);
+        console.error('修了証の送信中にエラーが発生しました:', error);
         // プレビュー環境ではCORSエラーがよく発生するため、アラートを調整
-        alert(`修了証のGoogle Driveへの送信中にエラーが発生しました: ${error.message}\n(プレビュー環境ではCORSエラーにより失敗することがあります)`);
+        alert(`修了証の送信中にエラーが発生しました: ${error.message}\n(プレビュー環境ではCORSエラーにより失敗することがあります)`);
     }
 }
 
@@ -418,3 +418,4 @@ function renderRadarChart(canvasId, data) { const ctx = document.getElementById(
 </script>
 </body>
 </html>
+
