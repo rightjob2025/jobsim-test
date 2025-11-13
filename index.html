@@ -152,12 +152,12 @@ async function fetchAndInitialize() {
     startButton.disabled = true;
     startButton.textContent = 'データを読み込み中...';
 
-    // URLパラメータからスプレッドシートIDを取得
+    // URLパラメータからジョブシムIDを取得
     const urlParams = new URLSearchParams(window.location.search);
     SPREADSHEET_ID = urlParams.get('id'); // URL末尾に ?id=... で指定
 
     if (!SPREADSHEET_ID) {
-        alert('エラー: スプレッドシートIDがURLに指定されていません。\n例： .../file.html?id=YOUR_SHEET_ID');
+        alert('エラー: ジョブシムIDがURLに指定されていません。\n例： .../file.html?id=YOUR_SHEET_ID');
         startButton.textContent = '設定エラー';
         return;
     }
@@ -428,7 +428,7 @@ async function generateCertificate() {
 
 async function saveLogData(logData) {
     if (!SPREADSHEET_ID) {
-        console.error('ログ保存失敗: スプレッドシートIDがありません。');
+        console.error('ログ保存失敗: ジョブシムIDがありません。');
         return;
     }
     try {
@@ -456,8 +456,8 @@ async function saveLogData(logData) {
 // ★★★★★ ここから追加 ★★★★★
 async function saveCertificateToDrive(base64Data, fileName) {
     if (!SPREADSHEET_ID) {
-        console.error('PDF保存失敗: スプレッドシートIDがありません。');
-        alert('PDF保存失敗: スプレッドシートIDが設定されていません。');
+        console.error('PDF保存失敗: ジョブシムIDがありません。');
+        alert('PDF保存失敗: ジョブシムIDが設定されていません。');
         return;
     }
     try {
@@ -477,15 +477,15 @@ async function saveCertificateToDrive(base64Data, fileName) {
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         const result = await response.json();
         if (result.status === "success") {
-            console.log('修了証がGoogle Driveに保存されました。');
-            alert('修了証がGoogle Driveに保存されました。');
+            console.log('修了証が保存されました。');
+            alert('修了証が保存されました。');
         } else {
-            console.error('Driveへの保存に失敗しました:', result.message);
-            alert(`修了証のGoogle Driveへの保存に失敗しました: ${result.message}`);
+            console.error('保存に失敗しました:', result.message);
+            alert(`修了証の保存に失敗しました: ${result.message}`);
         }
     } catch (error) {
-        console.error('修了証のGoogle Driveへの送信中にエラーが発生しました:', error);
-        alert(`修了証のGoogle Driveへの送信中にエラーが発生しました: ${error.message}`);
+        console.error('修了証の送信中にエラーが発生しました:', error);
+        alert(`修了証の送信中にエラーが発生しました: ${error.message}`);
     }
 }
 
@@ -544,3 +544,4 @@ function renderRadarChart(canvasId, data) { const ctx = document.getElementById(
 </script>
 </body>
 </html>
+
